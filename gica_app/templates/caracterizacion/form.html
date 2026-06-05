@@ -1,0 +1,120 @@
+{% extends 'base.html' %}
+{% block title %}{{ 'Editar' if car else 'Nueva' }} Caracterización{% endblock %}
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{{ url_for('dashboard') }}">Inicio</a></li>
+<li class="breadcrumb-item"><a href="{{ url_for('caracterizacion') }}">Caracterización</a></li>
+<li class="breadcrumb-item active">{{ 'Editar' if car else 'Nueva' }}</li>
+{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+<div class="col-lg-10">
+<div class="card">
+    <div class="card-header bg-white"><strong><i class="bi bi-card-checklist me-2"></i>{{ 'Editar' if car else 'Nueva' }} Caracterización de Proceso</strong></div>
+    <div class="card-body">
+        <form method="post">
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <label class="form-label">Proceso <span class="text-danger">*</span></label>
+                    <select name="proceso_id" class="form-select" required>
+                        <option value="">-- Seleccione proceso --</option>
+                        {% for p in procesos %}
+                        <option value="{{ p['id'] }}" {% if (car and car['proceso_id'] == p['id']) or (selected_proceso and selected_proceso == p['id']|string) %}selected{% endif %}>
+                            {{ p['codigo'] }} - {{ p['nombre'] }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Versión</label>
+                    <input type="text" name="version" class="form-control" value="{{ car['version'] if car else '1.0' }}" placeholder="1.0">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Estado</label>
+                    <select name="estado" class="form-select">
+                        {% for e in ['BORRADOR','EN CONSTRUCCION','EN REVISION','APROBADO'] %}
+                        <option value="{{ e }}" {% if car and car['estado'] == e %}selected{% endif %}>{{ e }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <div class="row g-3 mb-3">
+                <div class="col-md-6">
+                    <label class="form-label fw-bold text-primary">Objetivo del Proceso</label>
+                    <textarea name="objetivo" class="form-control" rows="3">{{ car['objetivo'] if car else '' }}</textarea>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-bold text-primary">Alcance</label>
+                    <textarea name="alcance" class="form-control" rows="3">{{ car['alcance'] if car else '' }}</textarea>
+                </div>
+            </div>
+
+            <div class="border rounded p-3 mb-3 bg-light">
+                <h6 class="text-secondary mb-3"><i class="bi bi-arrow-left-right me-1"></i>SIPOC</h6>
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label">Proveedores (S - Suppliers)</label>
+                        <textarea name="proveedor" class="form-control" rows="2" placeholder="Quién provee las entradas">{{ car['proveedor'] if car else '' }}</textarea>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Entradas (I - Inputs)</label>
+                        <textarea name="entradas" class="form-control" rows="2" placeholder="Insumos y recursos necesarios">{{ car['entradas'] if car else '' }}</textarea>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label">Actividades (P - Process)</label>
+                        <textarea name="actividades" class="form-control" rows="3" placeholder="Principales actividades del proceso">{{ car['actividades'] if car else '' }}</textarea>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Salidas (O - Outputs)</label>
+                        <textarea name="salidas" class="form-control" rows="2" placeholder="Productos y servicios generados">{{ car['salidas'] if car else '' }}</textarea>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Clientes (C - Customers)</label>
+                        <textarea name="cliente" class="form-control" rows="2" placeholder="Destinatarios de las salidas">{{ car['cliente'] if car else '' }}</textarea>
+                    </div>
+                </div>
+            </div>
+
+            <div class="border rounded p-3 mb-3 bg-light">
+                <h6 class="text-secondary mb-3"><i class="bi bi-gear me-1"></i>Recursos</h6>
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label">Recursos Humanos</label>
+                        <textarea name="recursos_humanos" class="form-control" rows="2">{{ car['recursos_humanos'] if car else '' }}</textarea>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Recursos Tecnológicos</label>
+                        <textarea name="recursos_tecnologicos" class="form-control" rows="2">{{ car['recursos_tecnologicos'] if car else '' }}</textarea>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Recursos Físicos</label>
+                        <textarea name="recursos_fisicos" class="form-control" rows="2">{{ car['recursos_fisicos'] if car else '' }}</textarea>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row g-3 mb-4">
+                <div class="col-md-4">
+                    <label class="form-label">Normatividad Aplicable</label>
+                    <textarea name="normatividad" class="form-control" rows="2">{{ car['normatividad'] if car else '' }}</textarea>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Indicadores Asociados</label>
+                    <textarea name="indicadores_ref" class="form-control" rows="2">{{ car['indicadores_ref'] if car else '' }}</textarea>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Riesgos Asociados</label>
+                    <textarea name="riesgos_ref" class="form-control" rows="2">{{ car['riesgos_ref'] if car else '' }}</textarea>
+                </div>
+            </div>
+
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-info text-white">Guardar</button>
+                <a href="{{ url_for('caracterizacion') }}" class="btn btn-outline-secondary">Cancelar</a>
+            </div>
+        </form>
+    </div>
+</div>
+</div>
+</div>
+{% endblock %}

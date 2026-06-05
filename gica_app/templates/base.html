@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}GICA - Sistema de Gestión de Calidad{% endblock %}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <link href="https://cdn.datatables.net/1.13.7/css/dataTables.bootstrap5.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --color-primary: #0d6efd;
+            --color-verde: #198754;
+            --color-amarillo: #ffc107;
+            --color-rojo: #dc3545;
+            --sidebar-width: 262px;
+        }
+        body { background: #f4f6f9; }
+        #sidebar {
+            width: var(--sidebar-width);
+            min-height: 100vh;
+            background: linear-gradient(180deg, #1a2744 0%, #2c3e70 100%);
+            position: fixed; top: 0; left: 0;
+            overflow-y: auto; z-index: 1000;
+        }
+        #sidebar .sidebar-brand {
+            padding: 1.1rem 1rem;
+            border-bottom: 1px solid rgba(255,255,255,.1);
+            color: #fff;
+        }
+        #sidebar .nav-link {
+            color: rgba(255,255,255,.75);
+            padding: .55rem 1.1rem;
+            border-radius: 8px;
+            margin: 2px 8px;
+            font-size: .85rem;
+            transition: all .2s;
+        }
+        #sidebar .nav-link:hover, #sidebar .nav-link.active {
+            background: rgba(255,255,255,.15); color: #fff;
+        }
+        #sidebar .nav-link i { width: 20px; text-align: center; margin-right: 8px; }
+        #sidebar .nav-section {
+            font-size: .68rem; text-transform: uppercase;
+            letter-spacing: 1px; color: rgba(255,255,255,.35);
+            padding: .7rem 1.2rem .15rem; font-weight: 600;
+        }
+        #sidebar .nav-divider { border-top: 1px solid rgba(255,255,255,.1); margin: .5rem .8rem; }
+        #sidebar .user-panel {
+            background: rgba(0,0,0,.2);
+            border-top: 1px solid rgba(255,255,255,.1);
+            padding: .8rem 1rem;
+        }
+        #main-content { margin-left: var(--sidebar-width); min-height: 100vh; }
+        .topbar {
+            background: #fff; border-bottom: 1px solid #e9ecef;
+            padding: .65rem 1.4rem; position: sticky; top: 0; z-index: 100;
+        }
+        .badge-semaforo { display: inline-block; width: 14px; height: 14px; border-radius: 50%; }
+        .badge-verde { background: var(--color-verde); }
+        .badge-amarillo { background: var(--color-amarillo); }
+        .badge-rojo { background: var(--color-rojo); }
+        .progress-bar-green { background: var(--color-verde) !important; }
+        .progress-bar-yellow { background: var(--color-amarillo) !important; }
+        .progress-bar-red { background: var(--color-rojo) !important; }
+        .card { border: none; box-shadow: 0 1px 4px rgba(0,0,0,.08); border-radius: 12px; }
+        .stat-card { border-left: 4px solid; }
+        .stat-card.verde { border-color: var(--color-verde); }
+        .stat-card.amarillo { border-color: var(--color-amarillo); }
+        .stat-card.rojo { border-color: var(--color-rojo); }
+        .stat-card.azul { border-color: var(--color-primary); }
+        .table th { font-size: .78rem; text-transform: uppercase; letter-spacing: .5px; color: #6c757d; }
+        .ponderacion-bar { height: 8px; border-radius: 4px; }
+        .estado-badge { font-size: .72rem; }
+        .avatar-sm {
+            width: 32px; height: 32px; border-radius: 50%;
+            display: inline-flex; align-items: center; justify-content: center;
+            font-weight: 700; font-size: .85rem;
+        }
+        @media (max-width: 768px) {
+            #sidebar { transform: translateX(-100%); transition: transform .3s; }
+            #sidebar.show { transform: translateX(0); }
+            #main-content { margin-left: 0; }
+        }
+    </style>
+    {% block head %}{% endblock %}
+</head>
+<body>
+
+<!-- SIDEBAR -->
+<nav id="sidebar">
+    <div class="sidebar-brand d-flex align-items-center gap-2">
+        <i class="bi bi-shield-check fs-4 text-info"></i>
+        <div>
+            <div class="fw-bold" style="font-size:.88rem;">Sistema GICA</div>
+            <div style="font-size:.68rem; opacity:.55;">Secretaría de Salud</div>
+        </div>
+    </div>
+
+    <ul class="nav flex-column mt-1 pb-2">
+        <li><div class="nav-section">Principal</div></li>
+        <li class="nav-item">
+            <a href="{{ url_for('dashboard') }}" class="nav-link {% if request.endpoint == 'dashboard' %}active{% endif %}">
+                <i class="bi bi-grid-1x2-fill"></i> Tablero GICA
+            </a>
+        </li>
+
+        <li><div class="nav-section mt-1">Estructura</div></li>
+        <li class="nav-item">
+            <a href="{{ url_for('tipos_proceso') }}" class="nav-link {% if 'tipo' in request.endpoint %}active{% endif %}">
+                <i class="bi bi-diagram-3"></i> Tipos de Proceso
+            </a>
+        </li>
+        <li class="nav-item">
+            <a href="{{ url_for('organigrama') }}" class="nav-link {% if 'organigrama' in request.endpoint %}active{% endif %}">
+                <i class="bi bi-building"></i> Organigrama
+            </a>
+        </li>
+        <li class="nav-item">
+            <a href="{{ url_for('procesos') }}" class="nav-link {% if request.endpoint in ['procesos','proceso_nuevo','proceso_editar','proceso_detalle','proceso_ponderacion'] %}active{% endif %}">
+                <i class="bi bi-gear-wide-connected"></i> Procesos
+            </a>
+        </li>
+
+        <li><div class="nav-section mt-1">Documentación</div></li>
+        <li class="nav-item">
+            <a href="{{ url_for('procedimientos') }}" class="nav-link {% if 'procedimiento' in request.endpoint %}active{% endif %}">
+                <i class="bi bi-file-earmark-text"></i> Procedimientos
+            </a>
+        </li>
+        <li class="nav-item">
+            <a href="{{ url_for('indicadores') }}" class="nav-link {% if 'indicador' in request.endpoint %}active{% endif %}">
+                <i class="bi bi-bar-chart-line"></i> Indicadores
+            </a>
+        </li>
+        <li class="nav-item">
+            <a href="{{ url_for('caracterizacion') }}" class="nav-link {% if 'caracterizacion' in request.endpoint %}active{% endif %}">
+                <i class="bi bi-card-checklist"></i> Caracterización
+            </a>
+        </li>
+
+        <li><div class="nav-section mt-1">Control</div></li>
+        <li class="nav-item">
+            <a href="{{ url_for('normograma') }}" class="nav-link {% if 'normograma' in request.endpoint %}active{% endif %}">
+                <i class="bi bi-journal-bookmark"></i> Normograma
+            </a>
+        </li>
+        <li class="nav-item">
+            <a href="{{ url_for('riesgos') }}" class="nav-link {% if 'riesgo' in request.endpoint %}active{% endif %}">
+                <i class="bi bi-exclamation-triangle"></i> Mapa de Riesgos
+            </a>
+        </li>
+
+        {% if session_user and session_user.rol_nivel == 1 %}
+        <li><div class="nav-divider"></div></li>
+        <li><div class="nav-section">Administración</div></li>
+        <li class="nav-item">
+            <a href="{{ url_for('usuarios_list') }}" class="nav-link {% if 'usuario' in request.endpoint %}active{% endif %}">
+                <i class="bi bi-people"></i> Usuarios
+            </a>
+        </li>
+        <li class="nav-item">
+            <a href="{{ url_for('roles_list') }}" class="nav-link {% if 'rol' in request.endpoint %}active{% endif %}">
+                <i class="bi bi-shield"></i> Roles
+            </a>
+        </li>
+        <li class="nav-item">
+            <a href="{{ url_for('auditoria') }}" class="nav-link {% if 'auditoria' in request.endpoint %}active{% endif %}">
+                <i class="bi bi-clock-history"></i> Auditoría
+            </a>
+        </li>
+        {% endif %}
+    </ul>
+
+    <!-- USER PANEL -->
+    {% if session_user %}
+    <div class="user-panel mt-auto">
+        <div class="dropdown">
+            <a href="#" class="d-flex align-items-center gap-2 text-decoration-none text-white dropdown-toggle"
+               data-bs-toggle="dropdown" aria-expanded="false">
+                {% set rol_color = {1:'danger',2:'primary',3:'success',4:'secondary'} %}
+                <div class="avatar-sm bg-{{ rol_color.get(session_user.rol_nivel,'secondary') }} text-white">
+                    {{ session_user.nombre_completo[0].upper() if session_user.nombre_completo else '?' }}
+                </div>
+                <div style="min-width:0;">
+                    <div class="small fw-semibold text-truncate" style="max-width:160px;">
+                        {{ session_user.nombre_completo }}
+                    </div>
+                    <div style="font-size:.7rem; opacity:.65;">{{ session_user.rol_nombre }}</div>
+                </div>
+            </a>
+            <ul class="dropdown-menu dropdown-menu-dark mb-1" style="bottom:100%; top:auto;">
+                <li>
+                    <a class="dropdown-item small" href="{{ url_for('mi_perfil') }}">
+                        <i class="bi bi-person me-2"></i>Mi Perfil
+                    </a>
+                </li>
+                <li>
+                    <a class="dropdown-item small" href="{{ url_for('cambiar_password') }}">
+                        <i class="bi bi-key me-2"></i>Cambiar Contraseña
+                    </a>
+                </li>
+                <li><hr class="dropdown-divider"></li>
+                <li>
+                    <a class="dropdown-item small text-danger" href="{{ url_for('logout') }}">
+                        <i class="bi bi-box-arrow-right me-2"></i>Cerrar Sesión
+                    </a>
+                </li>
+            </ul>
+        </div>
+    </div>
+    {% endif %}
+</nav>
+
+<!-- MAIN CONTENT -->
+<div id="main-content">
+    <!-- TOPBAR -->
+    <div class="topbar d-flex align-items-center justify-content-between">
+        <div class="d-flex align-items-center gap-3">
+            <button class="btn btn-sm btn-outline-secondary d-md-none" id="sidebarToggle">
+                <i class="bi bi-list"></i>
+            </button>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb mb-0 small">
+                    {% block breadcrumb %}
+                    <li class="breadcrumb-item active">Inicio</li>
+                    {% endblock %}
+                </ol>
+            </nav>
+        </div>
+        <div class="d-flex align-items-center gap-3">
+            <div class="small text-muted d-none d-sm-block">
+                <i class="bi bi-calendar3 me-1"></i>{{ now.strftime('%d/%m/%Y') if now }}
+            </div>
+            {% if session_user %}
+            <div class="dropdown">
+                <button class="btn btn-sm btn-outline-secondary dropdown-toggle d-flex align-items-center gap-1"
+                        data-bs-toggle="dropdown">
+                    {% set rc = {1:'danger',2:'primary',3:'success',4:'secondary'} %}
+                    <div class="avatar-sm bg-{{ rc.get(session_user.rol_nivel,'secondary') }} text-white"
+                         style="width:24px;height:24px;font-size:.7rem;">
+                        {{ session_user.nombre_completo[0].upper() if session_user.nombre_completo else '?' }}
+                    </div>
+                    <span class="d-none d-md-inline small">{{ session_user.username }}</span>
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end">
+                    <li>
+                        <div class="dropdown-header">
+                            <div class="fw-bold">{{ session_user.nombre_completo }}</div>
+                            <div class="small text-muted">{{ session_user.rol_nombre }}</div>
+                        </div>
+                    </li>
+                    <li><hr class="dropdown-divider"></li>
+                    <li><a class="dropdown-item small" href="{{ url_for('mi_perfil') }}"><i class="bi bi-person me-2"></i>Mi Perfil</a></li>
+                    <li><a class="dropdown-item small" href="{{ url_for('cambiar_password') }}"><i class="bi bi-key me-2"></i>Cambiar Contraseña</a></li>
+                    {% if session_user.rol_nivel == 1 %}
+                    <li><hr class="dropdown-divider"></li>
+                    <li><a class="dropdown-item small" href="{{ url_for('usuarios_list') }}"><i class="bi bi-people me-2"></i>Gestión de Usuarios</a></li>
+                    <li><a class="dropdown-item small" href="{{ url_for('auditoria') }}"><i class="bi bi-clock-history me-2"></i>Log de Auditoría</a></li>
+                    {% endif %}
+                    <li><hr class="dropdown-divider"></li>
+                    <li><a class="dropdown-item small text-danger" href="{{ url_for('logout') }}"><i class="bi bi-box-arrow-right me-2"></i>Cerrar Sesión</a></li>
+                </ul>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- PAGE CONTENT -->
+    <div class="p-4">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, msg in messages %}
+                <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show py-2" role="alert">
+                    {{ msg }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        {% block content %}{% endblock %}
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.7/js/dataTables.bootstrap5.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script>
+document.getElementById('sidebarToggle')?.addEventListener('click', () => {
+    document.getElementById('sidebar').classList.toggle('show');
+});
+$(document).ready(function() {
+    if ($('.datatable').length) {
+        $('.datatable').DataTable({
+            language: { url: 'https://cdn.datatables.net/plug-ins/1.13.7/i18n/es-ES.json' },
+            pageLength: 25
+        });
+    }
+});
+</script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

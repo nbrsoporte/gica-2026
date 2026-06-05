@@ -1,0 +1,131 @@
+{% extends 'base.html' %}
+{% block title %}Mi Perfil — GICA{% endblock %}
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{{ url_for('dashboard') }}">Inicio</a></li>
+<li class="breadcrumb-item active">Mi Perfil</li>
+{% endblock %}
+{% block content %}
+<div class="row g-4">
+    <!-- Datos del perfil -->
+    <div class="col-lg-5">
+        <div class="card">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                <strong><i class="bi bi-person-circle me-2"></i>Mi Perfil</strong>
+                <a href="{{ url_for('cambiar_password') }}" class="btn btn-sm btn-outline-warning">
+                    <i class="bi bi-key me-1"></i>Cambiar Contraseña
+                </a>
+            </div>
+            <div class="card-body">
+                <!-- Avatar -->
+                <div class="text-center mb-4">
+                    <div class="rounded-circle bg-primary d-inline-flex align-items-center justify-content-center text-white fw-bold"
+                         style="width:80px;height:80px;font-size:2rem;">
+                        {{ session_user.nombre_completo[0].upper() if session_user else '?' }}
+                    </div>
+                    <div class="mt-2">
+                        <span class="badge bg-{{ 'danger' if session_user.rol_nivel==1 else 'primary' if session_user.rol_nivel==2 else 'success' if session_user.rol_nivel==3 else 'secondary' }} fs-6">
+                            {{ session_user.rol_nombre }}
+                        </span>
+                    </div>
+                </div>
+
+                <form method="post">
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-muted">Usuario</label>
+                        <input type="text" class="form-control" value="{{ usuario['username'] }}" disabled>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Nombre Completo <span class="text-danger">*</span></label>
+                        <input type="text" name="nombre_completo" class="form-control"
+                               value="{{ usuario['nombre_completo'] }}" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Correo Electrónico</label>
+                        <input type="email" name="email" class="form-control"
+                               value="{{ usuario['email'] or '' }}">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-muted">Proceso Asignado</label>
+                        <input type="text" class="form-control"
+                               value="{{ usuario['proceso_nombre'] or 'Ninguno (acceso global)' }}" disabled>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-muted">Último Acceso</label>
+                        <input type="text" class="form-control"
+                               value="{{ usuario['ultimo_acceso'] or 'Primera sesión' }}" disabled>
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="bi bi-save me-1"></i>Guardar Cambios
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Permisos y actividad reciente -->
+    <div class="col-lg-7">
+        <!-- Permisos -->
+        <div class="card mb-4">
+            <div class="card-header bg-white">
+                <strong><i class="bi bi-shield-check me-2"></i>Permisos del Rol</strong>
+            </div>
+            <div class="card-body">
+                <div class="row g-2">
+                    {% set perms = [
+                        ('Ver Información', True, 'bi-eye', 'info'),
+                        ('Crear Registros', session_user.puede_crear, 'bi-plus-circle', 'success'),
+                        ('Editar Registros', session_user.puede_editar, 'bi-pencil', 'warning'),
+                        ('Eliminar Registros', session_user.puede_eliminar, 'bi-trash', 'danger'),
+                        ('Administrar Usuarios', session_user.puede_admin, 'bi-people', 'dark'),
+                    ] %}
+                    {% for nombre, tiene, icon, color in perms %}
+                    <div class="col-sm-6">
+                        <div class="d-flex align-items-center gap-2 p-2 rounded
+                             {% if tiene %}bg-{{ color }} bg-opacity-10 border border-{{ color }}-subtle{% else %}bg-light text-muted{% endif %}">
+                            <i class="bi {{ icon }} {% if tiene %}text-{{ color }}{% endif %}"></i>
+                            <span class="small fw-medium">{{ nombre }}</span>
+                            {% if tiene %}
+                            <i class="bi bi-check-circle-fill text-{{ color }} ms-auto small"></i>
+                            {% else %}
+                            <i class="bi bi-x-circle text-muted ms-auto small"></i>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Actividad reciente -->
+        <div class="card">
+            <div class="card-header bg-white">
+                <strong><i class="bi bi-clock-history me-2"></i>Actividad Reciente</strong>
+            </div>
+            <div class="card-body p-0">
+                {% if logs %}
+                <div class="table-responsive">
+                <table class="table table-sm mb-0">
+                    <thead class="table-light">
+                        <tr><th>Acción</th><th>Módulo</th><th>Detalle</th><th>Fecha</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for log in logs %}
+                        {% set accion_col = {'LOGIN':'success','LOGOUT':'secondary','CREAR':'primary','EDITAR':'warning','ELIMINAR':'danger','LOGIN_FALLIDO':'danger'} %}
+                        <tr>
+                            <td><span class="badge bg-{{ accion_col.get(log['accion'],'secondary') }} small">{{ log['accion'] }}</span></td>
+                            <td class="small">{{ log['modulo'] or '—' }}</td>
+                            <td class="small text-muted">{{ log['detalle'][:40] if log['detalle'] else '—' }}</td>
+                            <td class="small text-muted" style="white-space:nowrap">{{ log['fecha'] }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                </div>
+                {% else %}
+                <p class="text-muted text-center py-3">Sin actividad registrada.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

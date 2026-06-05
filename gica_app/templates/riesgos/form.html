@@ -1,0 +1,149 @@
+{% extends 'base.html' %}
+{% block title %}{{ 'Editar' if riesgo else 'Nuevo' }} Riesgo - Mapa de Riesgos{% endblock %}
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{{ url_for('dashboard') }}">Inicio</a></li>
+<li class="breadcrumb-item"><a href="{{ url_for('riesgos') }}">Mapa de Riesgos</a></li>
+<li class="breadcrumb-item active">{{ 'Editar' if riesgo else 'Nuevo' }}</li>
+{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+<div class="col-lg-10">
+<div class="card">
+    <div class="card-header bg-white"><strong><i class="bi bi-exclamation-triangle me-2 text-danger"></i>{{ 'Editar' if riesgo else 'Nuevo' }} Riesgo</strong></div>
+    <div class="card-body">
+        <form method="post">
+            <div class="row">
+                <div class="col-md-3 mb-3">
+                    <label class="form-label">Código</label>
+                    <input type="text" name="codigo" class="form-control" value="{{ riesgo['codigo'] if riesgo else '' }}" placeholder="R-001">
+                </div>
+                <div class="col-md-9 mb-3">
+                    <label class="form-label">Nombre del Riesgo <span class="text-danger">*</span></label>
+                    <input type="text" name="nombre" class="form-control" value="{{ riesgo['nombre'] if riesgo else '' }}" required>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Proceso <span class="text-danger">*</span></label>
+                    <select name="proceso_id" class="form-select" required>
+                        <option value="">-- Seleccione --</option>
+                        {% for p in procesos %}
+                        <option value="{{ p['id'] }}" {% if (riesgo and riesgo['proceso_id'] == p['id']) or (selected_proceso and selected_proceso == p['id']|string) %}selected{% endif %}>
+                            {{ p['codigo'] }} - {{ p['nombre'] }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Tipo de Riesgo</label>
+                    <select name="tipo_riesgo" class="form-select">
+                        {% for t in ['Gestión','Legal','Financiero','Operativo','Tecnológico','Salud Pública','Reputacional','Corrupción'] %}
+                        <option value="{{ t }}" {% if riesgo and riesgo['tipo_riesgo'] == t %}selected{% endif %}>{{ t }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Descripción</label>
+                <textarea name="descripcion" class="form-control" rows="2">{{ riesgo['descripcion'] if riesgo else '' }}</textarea>
+            </div>
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Causas</label>
+                    <textarea name="causa" class="form-control" rows="2">{{ riesgo['causa'] if riesgo else '' }}</textarea>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Consecuencias</label>
+                    <textarea name="consecuencia" class="form-control" rows="2">{{ riesgo['consecuencia'] if riesgo else '' }}</textarea>
+                </div>
+            </div>
+
+            <!-- VALORACIÓN -->
+            <div class="border rounded p-3 mb-3 bg-light">
+                <h6 class="text-danger mb-3"><i class="bi bi-grid-3x3 me-1"></i>Valoración del Riesgo</h6>
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Probabilidad (1=Raro … 5=Casi Seguro)</label>
+                        <div class="d-flex gap-2">
+                            {% for v in range(1,6) %}
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="radio" name="probabilidad" id="prob{{ v }}" value="{{ v }}"
+                                       {% if riesgo and riesgo['probabilidad'] == v %}checked{% elif not riesgo and v == 1 %}checked{% endif %}>
+                                <label class="form-check-label" for="prob{{ v }}">{{ v }}</label>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        <small class="text-muted">1=Raro | 2=Improbable | 3=Posible | 4=Probable | 5=Casi Seguro</small>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Impacto (1=Insignificante … 5=Catastrófico)</label>
+                        <div class="d-flex gap-2">
+                            {% for v in range(1,6) %}
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="radio" name="impacto" id="imp{{ v }}" value="{{ v }}"
+                                       {% if riesgo and riesgo['impacto'] == v %}checked{% elif not riesgo and v == 1 %}checked{% endif %}>
+                                <label class="form-check-label" for="imp{{ v }}">{{ v }}</label>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        <small class="text-muted">1=Insignificante | 2=Menor | 3=Moderado | 4=Mayor | 5=Catastrófico</small>
+                    </div>
+                </div>
+                <div id="nivelResultado" class="alert mb-0"></div>
+            </div>
+
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Control Existente</label>
+                    <textarea name="control_existente" class="form-control" rows="2">{{ riesgo['control_existente'] if riesgo else '' }}</textarea>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Acción de Mitigación</label>
+                    <textarea name="accion_mitigacion" class="form-control" rows="2">{{ riesgo['accion_mitigacion'] if riesgo else '' }}</textarea>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Responsable</label>
+                    <input type="text" name="responsable" class="form-control" value="{{ riesgo['responsable'] if riesgo else '' }}">
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Fecha de Identificación</label>
+                    <input type="date" name="fecha_identificacion" class="form-control" value="{{ riesgo['fecha_identificacion'] if riesgo else '' }}">
+                </div>
+            </div>
+
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-danger">Guardar</button>
+                <a href="{{ url_for('riesgos') }}" class="btn btn-outline-secondary">Cancelar</a>
+            </div>
+        </form>
+    </div>
+</div>
+</div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const NIVELES = {
+    '1,1':'Bajo','1,2':'Bajo','1,3':'Moderado','1,4':'Alto','1,5':'Extremo',
+    '2,1':'Bajo','2,2':'Moderado','2,3':'Alto','2,4':'Alto','2,5':'Extremo',
+    '3,1':'Moderado','3,2':'Alto','3,3':'Alto','3,4':'Extremo','3,5':'Extremo',
+    '4,1':'Alto','4,2':'Alto','4,3':'Extremo','4,4':'Extremo','4,5':'Extremo',
+    '5,1':'Extremo','5,2':'Extremo','5,3':'Extremo','5,4':'Extremo','5,5':'Extremo'
+};
+const COLORS = {'Extremo':'danger','Alto':'warning','Moderado':'info','Bajo':'success'};
+function updateNivel() {
+    const prob = document.querySelector('input[name="probabilidad"]:checked')?.value || 1;
+    const imp = document.querySelector('input[name="impacto"]:checked')?.value || 1;
+    const nivel = NIVELES[prob+','+imp] || 'Bajo';
+    const color = COLORS[nivel];
+    const el = document.getElementById('nivelResultado');
+    el.className = 'alert alert-' + color + ' mb-0';
+    el.innerHTML = '<strong>Nivel de Riesgo: ' + nivel + '</strong> (Probabilidad ' + prob + ' × Impacto ' + imp + ')';
+}
+document.querySelectorAll('input[name="probabilidad"], input[name="impacto"]').forEach(r => r.addEventListener('change', updateNivel));
+updateNivel();
+</script>
+{% endblock %}

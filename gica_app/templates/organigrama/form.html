@@ -1,0 +1,44 @@
+{% extends 'base.html' %}
+{% block title %}{{ 'Editar' if unidad else 'Nueva' }} Unidad - Organigrama{% endblock %}
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{{ url_for('dashboard') }}">Inicio</a></li>
+<li class="breadcrumb-item"><a href="{{ url_for('organigrama') }}">Organigrama</a></li>
+<li class="breadcrumb-item active">{{ 'Editar' if unidad else 'Nueva' }}</li>
+{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+<div class="col-lg-6">
+<div class="card">
+    <div class="card-header bg-white"><strong>{{ 'Editar' if unidad else 'Nueva' }} Unidad del Organigrama</strong></div>
+    <div class="card-body">
+        <form method="post">
+            <div class="mb-3">
+                <label class="form-label">Nombre de la Unidad <span class="text-danger">*</span></label>
+                <input type="text" name="nombre" class="form-control" value="{{ unidad['nombre'] if unidad else '' }}" required>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Nivel</label>
+                <select name="nivel" class="form-select">
+                    {% for niv in ['Dirección', 'Subdirección', 'Asesoría', 'Coordinación', 'Dependencia', 'Grupo de trabajo'] %}
+                    <option value="{{ niv }}" {% if unidad and unidad['nivel'] == niv %}selected{% endif %}>{{ niv }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Responsable</label>
+                <input type="text" name="responsable" class="form-control" value="{{ unidad['responsable'] if unidad else '' }}">
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Descripción</label>
+                <textarea name="descripcion" class="form-control" rows="3">{{ unidad['descripcion'] if unidad else '' }}</textarea>
+            </div>
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">Guardar</button>
+                <a href="{{ url_for('organigrama') }}" class="btn btn-outline-secondary">Cancelar</a>
+            </div>
+        </form>
+    </div>
+</div>
+</div>
+</div>
+{% endblock %}

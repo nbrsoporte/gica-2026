@@ -1,0 +1,56 @@
+{% extends 'base.html' %}
+{% block title %}Indicadores - GICA{% endblock %}
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{{ url_for('dashboard') }}">Inicio</a></li>
+<li class="breadcrumb-item active">Indicadores</li>
+{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h4 class="mb-0 fw-bold"><i class="bi bi-bar-chart-line me-2"></i>Gestión de Indicadores</h4>
+    <a href="{{ url_for('indicador_nuevo') }}" class="btn btn-success"><i class="bi bi-plus-lg me-1"></i>Nuevo</a>
+</div>
+<div class="card mb-3">
+    <div class="card-body py-2">
+        <form method="get" class="d-flex align-items-center gap-3">
+            <label class="small fw-bold text-muted mb-0">Filtrar por proceso:</label>
+            <select name="proceso_id" class="form-select form-select-sm" style="max-width:350px;" onchange="this.form.submit()">
+                <option value="">Todos</option>
+                {% for p in procesos %}
+                <option value="{{ p['id'] }}" {% if filtro_proceso == p['id']|string %}selected{% endif %}>{{ p['nombre'] }}</option>
+                {% endfor %}
+            </select>
+            {% if filtro_proceso %}<a href="{{ url_for('indicadores') }}" class="btn btn-sm btn-outline-secondary">Limpiar</a>{% endif %}
+        </form>
+    </div>
+</div>
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+        <table class="table table-hover mb-0 align-middle datatable">
+            <thead class="table-light">
+                <tr><th>Código</th><th>Indicador</th><th>Proceso</th><th>Estado</th><th>Meta</th><th>Frecuencia</th><th>Responsable</th><th style="width:100px">Acciones</th></tr>
+            </thead>
+            <tbody>
+                {% for i in indicadores %}
+                <tr>
+                    <td class="small text-muted">{{ i['codigo'] }}</td>
+                    <td class="small fw-medium">{{ i['nombre'] }}</td>
+                    <td class="small text-muted">{{ i['proceso_codigo'] }} — {{ i['proceso_nombre'][:30] }}{% if i['proceso_nombre']|length > 30 %}…{% endif %}</td>
+                    <td><span class="badge bg-light text-dark border estado-badge">{{ i['estado'] }}</span></td>
+                    <td class="small">{{ i['meta'] or '—' }}</td>
+                    <td class="small">{{ i['frecuencia'] or '—' }}</td>
+                    <td class="small">{{ i['responsable'] or '—' }}</td>
+                    <td>
+                        <a href="{{ url_for('indicador_editar', id=i['id']) }}" class="btn btn-sm btn-outline-primary"><i class="bi bi-pencil"></i></a>
+                        <form method="post" action="{{ url_for('indicador_eliminar', id=i['id']) }}" class="d-inline" onsubmit="return confirm('¿Eliminar?')">
+                            <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

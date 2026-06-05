@@ -1,0 +1,75 @@
+{% extends 'base.html' %}
+{% block title %}Roles y Permisos — GICA{% endblock %}
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{{ url_for('dashboard') }}">Inicio</a></li>
+<li class="breadcrumb-item"><a href="{{ url_for('usuarios_list') }}">Usuarios</a></li>
+<li class="breadcrumb-item active">Roles</li>
+{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h4 class="mb-0 fw-bold"><i class="bi bi-shield me-2"></i>Roles y Permisos</h4>
+    <a href="{{ url_for('rol_nuevo') }}" class="btn btn-primary"><i class="bi bi-plus-lg me-1"></i>Nuevo Rol</a>
+</div>
+
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+        <table class="table table-hover mb-0 align-middle">
+            <thead class="table-light">
+                <tr>
+                    <th>Rol</th><th>Nivel</th><th class="text-center">Ver</th>
+                    <th class="text-center">Crear</th><th class="text-center">Editar</th>
+                    <th class="text-center">Eliminar</th><th class="text-center">Adm. Usuarios</th>
+                    <th class="text-center">Usuarios</th><th>Descripción</th>
+                    <th style="width:100px">Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for r in roles %}
+                {% set col = {1:'danger',2:'primary',3:'success',4:'secondary'} %}
+                <tr>
+                    <td>
+                        <span class="badge bg-{{ col.get(r['nivel'],'secondary') }} fs-6">
+                            {{ r['nombre'] }}
+                        </span>
+                    </td>
+                    <td class="text-center fw-bold">{{ r['nivel'] }}</td>
+                    {% for field in [True, r['puede_crear'], r['puede_editar'], r['puede_eliminar'], r['puede_admin_usuarios']] %}
+                    <td class="text-center">
+                        {% if field %}
+                        <i class="bi bi-check-circle-fill text-success fs-5"></i>
+                        {% else %}
+                        <i class="bi bi-x-circle text-muted fs-5"></i>
+                        {% endif %}
+                    </td>
+                    {% endfor %}
+                    <td class="text-center">
+                        <span class="badge bg-primary rounded-pill">{{ r['num_usuarios'] }}</span>
+                    </td>
+                    <td class="small text-muted">{{ r['descripcion'] }}</td>
+                    <td>
+                        <a href="{{ url_for('rol_editar', id=r['id']) }}" class="btn btn-sm btn-outline-primary">
+                            <i class="bi bi-pencil"></i>
+                        </a>
+                        {% if r['num_usuarios'] == 0 %}
+                        <form method="post" action="{{ url_for('rol_eliminar', id=r['id']) }}" class="d-inline"
+                              onsubmit="return confirm('¿Eliminar el rol {{ r.nombre }}?')">
+                            <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
+                        </form>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        </div>
+    </div>
+</div>
+
+<div class="alert alert-info mt-3 small">
+    <i class="bi bi-info-circle me-1"></i>
+    <strong>Nivel de acceso:</strong> Nivel 1 (Administrador) tiene acceso total.
+    Niveles mayores tienen menos privilegios. El nivel 4 (Consultor) es de solo lectura.
+    No se puede eliminar un rol que tiene usuarios asignados.
+</div>
+{% endblock %}

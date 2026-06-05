@@ -1,0 +1,52 @@
+{% extends 'base.html' %}
+{% block title %}Procesos - GICA{% endblock %}
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{{ url_for('dashboard') }}">Inicio</a></li>
+<li class="breadcrumb-item active">Procesos</li>
+{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h4 class="mb-0 fw-bold"><i class="bi bi-gear-wide-connected me-2"></i>Procesos</h4>
+    <a href="{{ url_for('proceso_nuevo') }}" class="btn btn-primary"><i class="bi bi-plus-lg me-1"></i>Nuevo Proceso</a>
+</div>
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+        <table class="table table-hover mb-0 align-middle datatable">
+            <thead class="table-light">
+                <tr>
+                    <th>Código</th><th>Proceso</th><th>Tipo</th><th>Unidad</th>
+                    <th class="text-center">Pond.</th><th class="text-center">Estado</th>
+                    <th style="width:130px">Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for p in procesos %}
+                {% set sem = semaforo(p['ponderacion']) %}
+                <tr>
+                    <td class="small text-muted">{{ p['codigo'] }}</td>
+                    <td class="fw-medium">{{ p['nombre'] | title }}</td>
+                    <td><span class="badge bg-light text-dark border small">{{ p['tipo_nombre'] }}</span></td>
+                    <td class="small text-muted">{{ p['unidad_nombre'] or '—' }}</td>
+                    <td class="text-center fw-bold {% if sem == 'verde' %}text-success{% elif sem == 'amarillo' %}text-warning{% else %}text-danger{% endif %}">
+                        {{ "%.1f"|format(p['ponderacion']*100) }}%
+                    </td>
+                    <td class="text-center">
+                        <span class="badge-semaforo badge-{{ sem }}"></span>
+                        <span class="ms-1 small">{{ sem | capitalize }}</span>
+                    </td>
+                    <td>
+                        <a href="{{ url_for('proceso_detalle', id=p['id']) }}" class="btn btn-sm btn-outline-info" title="Ver detalle"><i class="bi bi-eye"></i></a>
+                        <a href="{{ url_for('proceso_editar', id=p['id']) }}" class="btn btn-sm btn-outline-primary" title="Editar"><i class="bi bi-pencil"></i></a>
+                        <form method="post" action="{{ url_for('proceso_eliminar', id=p['id']) }}" class="d-inline" onsubmit="return confirm('¿Eliminar este proceso?')">
+                            <button class="btn btn-sm btn-outline-danger" title="Eliminar"><i class="bi bi-trash"></i></button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

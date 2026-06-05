@@ -1,0 +1,240 @@
+{% extends 'base.html' %}
+{% block title %}Tablero GICA 2026{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item active"><i class="bi bi-grid-1x2-fill me-1"></i>Tablero GICA</li>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h4 class="mb-0 fw-bold">Tablero Gestión Institucional de la Calidad</h4>
+        <small class="text-muted">Avance GICA 2026 — Secretaría de Salud Departamental</small>
+    </div>
+</div>
+
+<!-- RESUMEN -->
+<div class="row g-3 mb-4">
+    <div class="col-sm-6 col-lg-3">
+        <div class="card stat-card azul p-3">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <div class="small text-muted">Total Procesos</div>
+                    <div class="fs-2 fw-bold text-primary">{{ resumen.total }}</div>
+                </div>
+                <i class="bi bi-gear-wide-connected fs-1 text-primary opacity-25"></i>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-lg-3">
+        <div class="card stat-card verde p-3">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <div class="small text-muted">En Verde (≥90%)</div>
+                    <div class="fs-2 fw-bold text-success">{{ resumen.verde }}</div>
+                </div>
+                <i class="bi bi-check-circle-fill fs-1 text-success opacity-25"></i>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-lg-3">
+        <div class="card stat-card amarillo p-3">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <div class="small text-muted">En Amarillo (70-89%)</div>
+                    <div class="fs-2 fw-bold text-warning">{{ resumen.amarillo }}</div>
+                </div>
+                <i class="bi bi-exclamation-circle-fill fs-1 text-warning opacity-25"></i>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-lg-3">
+        <div class="card stat-card rojo p-3">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <div class="small text-muted">En Rojo (&lt;70%)</div>
+                    <div class="fs-2 fw-bold text-danger">{{ resumen.rojo }}</div>
+                </div>
+                <i class="bi bi-x-circle-fill fs-1 text-danger opacity-25"></i>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- LEYENDA ESCALA DE COLORES -->
+<div class="card mb-4">
+    <div class="card-body py-2">
+        <div class="row align-items-center">
+            <div class="col-auto small text-muted fw-bold">Escala de semáforo:</div>
+            <div class="col-auto d-flex align-items-center gap-1 small">
+                <span class="badge-semaforo badge-verde"></span> Verde = 90% a 100%
+            </div>
+            <div class="col-auto d-flex align-items-center gap-1 small">
+                <span class="badge-semaforo badge-amarillo"></span> Amarillo = 70% a 89%
+            </div>
+            <div class="col-auto d-flex align-items-center gap-1 small">
+                <span class="badge-semaforo badge-rojo"></span> Rojo = menos del 70%
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- TABLA PRINCIPAL POR TIPO -->
+{% set tipos_ordenados = ['Apoyo', 'Estratégico', 'Misional', 'Evaluación'] %}
+{% set tipo_icons = {'Apoyo': 'bi-tools', 'Estratégico': 'bi-compass', 'Misional': 'bi-heart-pulse', 'Evaluación': 'bi-clipboard2-check'} %}
+{% set tipo_colors = {'Apoyo': 'info', 'Estratégico': 'primary', 'Misional': 'success', 'Evaluación': 'warning'} %}
+
+{% for tipo in tipos_ordenados %}
+    {% set procs_tipo = procesos | selectattr('tipo_nombre', 'equalto', tipo) | list %}
+    {% if procs_tipo %}
+    <div class="card mb-3">
+        <div class="card-header bg-white d-flex align-items-center gap-2 py-2">
+            <i class="bi {{ tipo_icons.get(tipo, 'bi-circle') }} text-{{ tipo_colors.get(tipo, 'secondary') }} fs-5"></i>
+            <strong>Procesos {{ tipo }}s</strong>
+            <span class="badge bg-{{ tipo_colors.get(tipo, 'secondary') }} ms-1">{{ procs_tipo | length }}</span>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0 align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="width:40px">#</th>
+                            <th>Proceso</th>
+                            <th>Unidad Organigrama</th>
+                            <th class="text-center" style="width:90px">Procedim.</th>
+                            <th class="text-center" style="width:80px">Indicad.</th>
+                            <th class="text-center" style="width:90px">Caracteriz.</th>
+                            <th class="text-center" style="width:80px">Normog.</th>
+                            <th class="text-center" style="width:90px">M.Riesgos</th>
+                            <th style="width:150px">Ponderación</th>
+                            <th class="text-center" style="width:80px">Estado</th>
+                            <th style="width:50px"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for p in procs_tipo %}
+                        {% set sem = semaforo(p['ponderacion']) %}
+                        <tr>
+                            <td class="text-muted small">{{ p['codigo'] }}</td>
+                            <td class="fw-medium">{{ p['nombre'] | title }}</td>
+                            <td class="small text-muted">{{ p['unidad_nombre'] or '—' }}</td>
+                            <td class="text-center">
+                                <span class="small fw-bold {% if p['proc_score'] >= 0.9 %}text-success{% elif p['proc_score'] >= 0.7 %}text-warning{% else %}text-danger{% endif %}">
+                                    {{ "%.0f"|format(p['proc_score']*100) }}%
+                                </span>
+                            </td>
+                            <td class="text-center">
+                                <span class="small fw-bold {% if p['ind_score'] >= 0.9 %}text-success{% elif p['ind_score'] >= 0.7 %}text-warning{% else %}text-danger{% endif %}">
+                                    {{ "%.0f"|format(p['ind_score']*100) }}%
+                                </span>
+                            </td>
+                            <td class="text-center">
+                                <span class="small fw-bold {% if p['car_score'] >= 0.9 %}text-success{% elif p['car_score'] >= 0.7 %}text-warning{% else %}text-danger{% endif %}">
+                                    {{ "%.0f"|format(p['car_score']*100) }}%
+                                </span>
+                            </td>
+                            <td class="text-center">
+                                <span class="small fw-bold {% if p['norm_score'] >= 0.9 %}text-success{% elif p['norm_score'] >= 0.7 %}text-warning{% else %}text-danger{% endif %}">
+                                    {{ "%.0f"|format(p['norm_score']*100) }}%
+                                </span>
+                            </td>
+                            <td class="text-center">
+                                <span class="small fw-bold {% if p['risk_score'] >= 0.9 %}text-success{% elif p['risk_score'] >= 0.7 %}text-warning{% else %}text-danger{% endif %}">
+                                    {{ "%.0f"|format(p['risk_score']*100) }}%
+                                </span>
+                            </td>
+                            <td>
+                                <div class="d-flex align-items-center gap-2">
+                                    <div class="progress flex-grow-1" style="height:10px; border-radius:5px;">
+                                        <div class="progress-bar {% if sem == 'verde' %}progress-bar-green{% elif sem == 'amarillo' %}progress-bar-yellow{% else %}progress-bar-red{% endif %}"
+                                             style="width:{{ (p['ponderacion']*100)|round|int }}%"></div>
+                                    </div>
+                                    <span class="small fw-bold" style="min-width:36px; text-align:right;">{{ "%.1f"|format(p['ponderacion']*100) }}%</span>
+                                </div>
+                            </td>
+                            <td class="semaforo-cell">
+                                <span class="badge-semaforo badge-{{ sem }}" title="{{ sem | upper }}"></span>
+                                <span class="ms-1 small text-capitalize">{{ sem }}</span>
+                            </td>
+                            <td>
+                                <a href="{{ url_for('proceso_detalle', id=p['id']) }}" class="btn btn-sm btn-outline-primary py-0">
+                                    <i class="bi bi-eye"></i>
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+{% endfor %}
+
+<!-- GRÁFICO -->
+<div class="row g-3 mt-2">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header bg-white">
+                <strong><i class="bi bi-bar-chart me-2"></i>Ponderación por Proceso</strong>
+            </div>
+            <div class="card-body">
+                <canvas id="chartPonderacion" height="120"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header bg-white">
+                <strong><i class="bi bi-pie-chart me-2"></i>Distribución Semáforo</strong>
+            </div>
+            <div class="card-body d-flex justify-content-center">
+                <canvas id="chartSemaforo" style="max-height:220px;"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Gráfico de barras ponderación
+fetch('/api/ponderacion-data')
+    .then(r => r.json())
+    .then(data => {
+        const labels = data.map(d => d.nombre.length > 30 ? d.nombre.substring(0,30)+'…' : d.nombre);
+        const valores = data.map(d => d.valor);
+        const colores = valores.map(v => v >= 90 ? '#198754' : v >= 70 ? '#ffc107' : '#dc3545');
+        new Chart(document.getElementById('chartPonderacion'), {
+            type: 'bar',
+            data: { labels, datasets: [{ label: 'Ponderación (%)', data: valores, backgroundColor: colores, borderRadius: 4 }] },
+            options: {
+                indexAxis: 'y',
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: { min: 0, max: 100, ticks: { callback: v => v+'%' } },
+                    y: { ticks: { font: { size: 10 } } }
+                }
+            }
+        });
+    });
+
+// Gráfico de dona semáforo
+new Chart(document.getElementById('chartSemaforo'), {
+    type: 'doughnut',
+    data: {
+        labels: ['Verde (≥90%)', 'Amarillo (70-89%)', 'Rojo (<70%)'],
+        datasets: [{
+            data: [{{ resumen.verde }}, {{ resumen.amarillo }}, {{ resumen.rojo }}],
+            backgroundColor: ['#198754', '#ffc107', '#dc3545'],
+            borderWidth: 2
+        }]
+    },
+    options: {
+        plugins: {
+            legend: { position: 'bottom', labels: { font: { size: 11 } } }
+        }
+    }
+});
+</script>
+{% endblock %}

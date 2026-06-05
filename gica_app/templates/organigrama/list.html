@@ -1,0 +1,38 @@
+{% extends 'base.html' %}
+{% block title %}Organigrama - GICA{% endblock %}
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{{ url_for('dashboard') }}">Inicio</a></li>
+<li class="breadcrumb-item active">Organigrama</li>
+{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h4 class="mb-0 fw-bold"><i class="bi bi-building me-2"></i>Organigrama — Unidades</h4>
+    <a href="{{ url_for('organigrama_nuevo') }}" class="btn btn-primary"><i class="bi bi-plus-lg me-1"></i>Nueva Unidad</a>
+</div>
+<div class="card">
+    <div class="card-body p-0">
+        <table class="table table-hover mb-0 align-middle datatable">
+            <thead class="table-light">
+                <tr><th>Unidad</th><th>Nivel</th><th>Responsable</th><th class="text-center">Procesos</th><th>Descripción</th><th style="width:120px">Acciones</th></tr>
+            </thead>
+            <tbody>
+                {% for u in unidades %}
+                <tr>
+                    <td class="fw-medium">{{ u['nombre'] }}</td>
+                    <td><span class="badge bg-light text-dark border">{{ u['nivel'] }}</span></td>
+                    <td class="small">{{ u['responsable'] or '—' }}</td>
+                    <td class="text-center"><span class="badge bg-primary rounded-pill">{{ u['num_procesos'] }}</span></td>
+                    <td class="text-muted small">{{ u['descripcion'] }}</td>
+                    <td>
+                        <a href="{{ url_for('organigrama_editar', id=u['id']) }}" class="btn btn-sm btn-outline-primary"><i class="bi bi-pencil"></i></a>
+                        <form method="post" action="{{ url_for('organigrama_eliminar', id=u['id']) }}" class="d-inline" onsubmit="return confirm('¿Eliminar esta unidad?')">
+                            <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

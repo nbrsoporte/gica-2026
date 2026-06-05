@@ -1,0 +1,105 @@
+{% extends 'base.html' %}
+{% block title %}Mapa de Riesgos - GICA{% endblock %}
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{{ url_for('dashboard') }}">Inicio</a></li>
+<li class="breadcrumb-item active">Mapa de Riesgos</li>
+{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+        <h4 class="mb-0 fw-bold"><i class="bi bi-exclamation-triangle me-2"></i>Mapa de Riesgos de Gestión</h4>
+        <small class="text-muted">Identificación y valoración de riesgos por proceso</small>
+    </div>
+    <a href="{{ url_for('riesgo_nuevo') }}" class="btn btn-danger"><i class="bi bi-plus-lg me-1"></i>Nuevo Riesgo</a>
+</div>
+
+<!-- MATRIZ DE CALOR -->
+<div class="card mb-3">
+    <div class="card-header bg-white d-flex align-items-center gap-2">
+        <i class="bi bi-grid-3x3 me-1"></i><strong>Matriz de Probabilidad × Impacto</strong>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+        <table class="table table-bordered text-center mb-0" style="max-width:500px;">
+            <thead>
+                <tr><th rowspan="2" class="align-middle">Prob. ↓ / Impacto →</th>
+                {% for i in range(1,6) %}<th>{{ i }}</th>{% endfor %}</tr>
+            </thead>
+            <tbody>
+                {% for p in range(5,0,-1) %}
+                <tr>
+                    <th>{{ p }}</th>
+                    {% for i in range(1,6) %}
+                    {% set nivel = niveles.get((p,i), ('Bajo','#28a745')) %}
+                    <td style="background:{{ nivel[1] }}22; color:{{ nivel[1] }}; font-weight:bold; font-size:0.75rem;">
+                        {{ nivel[0] }}
+                    </td>
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        </div>
+        <div class="d-flex gap-3 mt-2 small">
+            <span><span style="color:#dc3545">■</span> Extremo</span>
+            <span><span style="color:#fd7e14">■</span> Alto</span>
+            <span><span style="color:#ffc107">■</span> Moderado</span>
+            <span><span style="color:#28a745">■</span> Bajo</span>
+        </div>
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-body py-2">
+        <form method="get" class="d-flex align-items-center gap-3">
+            <label class="small fw-bold text-muted mb-0">Filtrar por proceso:</label>
+            <select name="proceso_id" class="form-select form-select-sm" style="max-width:350px;" onchange="this.form.submit()">
+                <option value="">Todos</option>
+                {% for p in procesos %}
+                <option value="{{ p['id'] }}" {% if filtro_proceso == p['id']|string %}selected{% endif %}>{{ p['nombre'] }}</option>
+                {% endfor %}
+            </select>
+            {% if filtro_proceso %}<a href="{{ url_for('riesgos') }}" class="btn btn-sm btn-outline-secondary">Limpiar</a>{% endif %}
+        </form>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+        <table class="table table-hover mb-0 align-middle datatable">
+            <thead class="table-light">
+                <tr>
+                    <th>Código</th><th>Riesgo</th><th>Proceso</th><th>Tipo</th>
+                    <th class="text-center">Prob.</th><th class="text-center">Impacto</th>
+                    <th>Nivel</th><th>Control</th><th>Responsable</th>
+                    <th style="width:100px">Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for r in riesgos %}
+                {% set nivel_col = {'Extremo':'danger','Alto':'warning','Moderado':'info','Bajo':'success'} %}
+                <tr>
+                    <td class="small text-muted">{{ r['codigo'] }}</td>
+                    <td class="small fw-medium">{{ r['nombre'] }}</td>
+                    <td class="small text-muted">{{ r['proceso_nombre'][:25] }}{% if r['proceso_nombre']|length > 25 %}…{% endif %}</td>
+                    <td><span class="badge bg-light text-dark border small">{{ r['tipo_riesgo'] }}</span></td>
+                    <td class="text-center fw-bold">{{ r['probabilidad'] }}</td>
+                    <td class="text-center fw-bold">{{ r['impacto'] }}</td>
+                    <td><span class="badge bg-{{ nivel_col.get(r['nivel_riesgo'], 'secondary') }}">{{ r['nivel_riesgo'] }}</span></td>
+                    <td class="small">{{ r['control_existente'][:40] if r['control_existente'] else '—' }}{% if r['control_existente'] and r['control_existente']|length > 40 %}…{% endif %}</td>
+                    <td class="small">{{ r['responsable'] or '—' }}</td>
+                    <td>
+                        <a href="{{ url_for('riesgo_editar', id=r['id']) }}" class="btn btn-sm btn-outline-primary"><i class="bi bi-pencil"></i></a>
+                        <form method="post" action="{{ url_for('riesgo_eliminar', id=r['id']) }}" class="d-inline" onsubmit="return confirm('¿Eliminar este riesgo?')">
+                            <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

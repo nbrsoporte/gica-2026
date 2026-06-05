@@ -1,0 +1,66 @@
+{% extends 'base.html' %}
+{% block title %}{{ 'Editar' if proceso else 'Nuevo' }} Proceso{% endblock %}
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{{ url_for('dashboard') }}">Inicio</a></li>
+<li class="breadcrumb-item"><a href="{{ url_for('procesos') }}">Procesos</a></li>
+<li class="breadcrumb-item active">{{ 'Editar' if proceso else 'Nuevo' }}</li>
+{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+<div class="col-lg-8">
+<div class="card">
+    <div class="card-header bg-white"><strong>{{ 'Editar' if proceso else 'Nuevo' }} Proceso</strong></div>
+    <div class="card-body">
+        <form method="post">
+            <div class="row">
+                <div class="col-md-3 mb-3">
+                    <label class="form-label">Código <span class="text-danger">*</span></label>
+                    <input type="text" name="codigo" class="form-control" value="{{ proceso['codigo'] if proceso else '' }}" required placeholder="P01">
+                </div>
+                <div class="col-md-9 mb-3">
+                    <label class="form-label">Nombre del Proceso <span class="text-danger">*</span></label>
+                    <input type="text" name="nombre" class="form-control" value="{{ proceso['nombre'] if proceso else '' }}" required>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Tipo de Proceso <span class="text-danger">*</span></label>
+                    <select name="tipo_proceso_id" class="form-select" required>
+                        <option value="">-- Seleccione --</option>
+                        {% for t in tipos %}
+                        <option value="{{ t['id'] }}" {% if proceso and proceso['tipo_proceso_id'] == t['id'] %}selected{% endif %}>
+                            {{ t['nombre'] }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Unidad del Organigrama</label>
+                    <select name="unidad_id" class="form-select">
+                        <option value="">-- Seleccione --</option>
+                        {% for u in unidades %}
+                        <option value="{{ u['id'] }}" {% if proceso and proceso['unidad_id'] == u['id'] %}selected{% endif %}>
+                            {{ u['nombre'] }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Objetivo del Proceso</label>
+                <textarea name="objetivo" class="form-control" rows="3">{{ proceso['objetivo'] if proceso else '' }}</textarea>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Alcance del Proceso</label>
+                <textarea name="alcance" class="form-control" rows="3">{{ proceso['alcance'] if proceso else '' }}</textarea>
+            </div>
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">Guardar</button>
+                <a href="{{ url_for('procesos') }}" class="btn btn-outline-secondary">Cancelar</a>
+            </div>
+        </form>
+    </div>
+</div>
+</div>
+</div>
+{% endblock %}

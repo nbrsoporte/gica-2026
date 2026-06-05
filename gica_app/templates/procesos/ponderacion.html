@@ -1,0 +1,97 @@
+{% extends 'base.html' %}
+{% block title %}Ponderación — {{ proceso['nombre'] }}{% endblock %}
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{{ url_for('dashboard') }}">Inicio</a></li>
+<li class="breadcrumb-item"><a href="{{ url_for('procesos') }}">Procesos</a></li>
+<li class="breadcrumb-item"><a href="{{ url_for('proceso_detalle', id=proceso['id']) }}">{{ proceso['nombre'][:30] }}</a></li>
+<li class="breadcrumb-item active">Ponderación</li>
+{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+<div class="col-lg-7">
+<div class="card">
+    <div class="card-header bg-white d-flex align-items-center gap-2">
+        <i class="bi bi-sliders fs-5 text-info"></i>
+        <strong>Ponderación del Proceso</strong>
+    </div>
+    <div class="card-body">
+        <div class="alert alert-info small mb-4">
+            <i class="bi bi-info-circle me-1"></i>
+            Ingrese el porcentaje de avance (0 a 1) para cada componente. La ponderación total se calcula como el promedio de los 5 componentes con igual peso (20% cada uno).
+        </div>
+        <form method="post" id="formPond">
+            {% set campos = [
+                ('proc_score', 'Procedimientos', 'bi-file-earmark-text', pond['proc_score'] if pond else 0),
+                ('ind_score', 'Indicadores', 'bi-bar-chart-line', pond['ind_score'] if pond else 0),
+                ('car_score', 'Caracterización', 'bi-card-checklist', pond['car_score'] if pond else 0),
+                ('norm_score', 'Normograma', 'bi-journal-bookmark', pond['norm_score'] if pond else 0),
+                ('risk_score', 'Mapa de Riesgos', 'bi-exclamation-triangle', pond['risk_score'] if pond else 0),
+            ] %}
+            {% for name, label, icon, val in campos %}
+            <div class="mb-4">
+                <label class="form-label fw-medium">
+                    <i class="bi {{ icon }} me-1"></i>{{ label }}
+                </label>
+                <div class="d-flex align-items-center gap-3">
+                    <input type="range" class="form-range flex-grow-1 score-range" name="{{ name }}"
+                           min="0" max="1" step="0.01" value="{{ val }}"
+                           data-label="{{ name }}_label">
+                    <span class="fw-bold" id="{{ name }}_label" style="min-width:50px; text-align:right;">
+                        {{ "%.0f"|format(val*100) }}%
+                    </span>
+                </div>
+                <div class="progress mt-1" style="height:6px;">
+                    <div class="progress-bar" id="{{ name }}_bar"
+                         style="width:{{ (val*100)|round }}%; background: {{ semaforo_color(val) }}"></div>
+                </div>
+            </div>
+            {% endfor %}
+
+            <div class="border rounded p-3 mb-4 bg-light">
+                <div class="d-flex justify-content-between align-items-center">
+                    <strong><i class="bi bi-trophy me-1"></i>Ponderación Total (Promedio)</strong>
+                    <span class="fs-4 fw-bold" id="totalLabel">—</span>
+                </div>
+                <div class="progress mt-2" style="height:12px; border-radius:6px;">
+                    <div class="progress-bar" id="totalBar" style="height:12px; border-radius:6px;"></div>
+                </div>
+            </div>
+
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">Guardar Ponderación</button>
+                <a href="{{ url_for('proceso_detalle', id=proceso['id']) }}" class="btn btn-outline-secondary">Cancelar</a>
+            </div>
+        </form>
+    </div>
+</div>
+</div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function updateTotal() {
+    const ranges = document.querySelectorAll('.score-range');
+    let total = 0;
+    ranges.forEach(r => {
+        const val = parseFloat(r.value);
+        total += val;
+        const pct = Math.round(val * 100);
+        document.getElementById(r.dataset.label).textContent = pct + '%';
+        const bar = document.getElementById(r.name + '_bar');
+        bar.style.width = pct + '%';
+        bar.style.background = val >= 0.9 ? '#198754' : val >= 0.7 ? '#ffc107' : '#dc3545';
+    });
+    const avg = total / ranges.length;
+    const avgPct = Math.round(avg * 100);
+    const color = avg >= 0.9 ? '#198754' : avg >= 0.7 ? '#ffc107' : '#dc3545';
+    document.getElementById('totalLabel').textContent = avgPct + '%';
+    document.getElementById('totalLabel').style.color = color;
+    const tb = document.getElementById('totalBar');
+    tb.style.width = avgPct + '%';
+    tb.style.background = color;
+}
+document.querySelectorAll('.score-range').forEach(r => r.addEventListener('input', updateTotal));
+updateTotal();
+</script>
+{% endblock %}

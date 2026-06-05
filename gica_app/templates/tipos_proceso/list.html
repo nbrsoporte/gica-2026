@@ -1,0 +1,39 @@
+{% extends 'base.html' %}
+{% block title %}Tipos de Proceso - GICA{% endblock %}
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{{ url_for('dashboard') }}">Inicio</a></li>
+<li class="breadcrumb-item active">Tipos de Proceso</li>
+{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h4 class="mb-0 fw-bold"><i class="bi bi-diagram-3 me-2"></i>Tipos de Proceso</h4>
+    <a href="{{ url_for('tipo_proceso_nuevo') }}" class="btn btn-primary"><i class="bi bi-plus-lg me-1"></i>Nuevo Tipo</a>
+</div>
+<div class="card">
+    <div class="card-body p-0">
+        <table class="table table-hover mb-0 align-middle">
+            <thead class="table-light">
+                <tr>
+                    <th>Código</th><th>Nombre</th><th>Orden</th><th>Descripción</th><th style="width:120px">Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for t in tipos %}
+                <tr>
+                    <td><span class="badge bg-secondary">{{ t['codigo'] }}</span></td>
+                    <td class="fw-medium">{{ t['nombre'] }}</td>
+                    <td>{{ t['orden'] }}</td>
+                    <td class="text-muted small">{{ t['descripcion'] }}</td>
+                    <td>
+                        <a href="{{ url_for('tipo_proceso_editar', id=t['id']) }}" class="btn btn-sm btn-outline-primary"><i class="bi bi-pencil"></i></a>
+                        <form method="post" action="{{ url_for('tipo_proceso_eliminar', id=t['id']) }}" class="d-inline" onsubmit="return confirm('¿Eliminar este tipo?')">
+                            <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

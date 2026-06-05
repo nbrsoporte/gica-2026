@@ -1,0 +1,232 @@
+{% extends 'base.html' %}
+{% block title %}{{ proceso['nombre'] }} - Detalle{% endblock %}
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{{ url_for('dashboard') }}">Inicio</a></li>
+<li class="breadcrumb-item"><a href="{{ url_for('procesos') }}">Procesos</a></li>
+<li class="breadcrumb-item active">{{ proceso['nombre'][:40] }}</li>
+{% endblock %}
+
+{% block content %}
+{% set sem = semaforo(proceso['ponderacion']) %}
+<div class="d-flex justify-content-between align-items-start mb-4">
+    <div>
+        <span class="badge bg-light text-dark border me-2">{{ proceso['codigo'] }}</span>
+        <span class="badge bg-secondary me-2">{{ proceso['tipo_nombre'] }}</span>
+        <h4 class="mt-1 mb-0 fw-bold">{{ proceso['nombre'] | title }}</h4>
+        <small class="text-muted"><i class="bi bi-building me-1"></i>{{ proceso['unidad_nombre'] or 'Sin unidad asignada' }}</small>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="{{ url_for('proceso_ponderacion', id=proceso['id']) }}" class="btn btn-outline-info btn-sm">
+            <i class="bi bi-sliders me-1"></i>Ponderación
+        </a>
+        <a href="{{ url_for('proceso_editar', id=proceso['id']) }}" class="btn btn-outline-primary btn-sm">
+            <i class="bi bi-pencil me-1"></i>Editar
+        </a>
+    </div>
+</div>
+
+<!-- TARJETAS DE COMPONENTES -->
+<div class="row g-3 mb-4">
+    {% set componentes = [
+        ('Procedimientos', proceso['proc_score'], 'bi-file-earmark-text', 'primary', 'procedimientos', 'proceso_id=' ~ proceso['id']),
+        ('Indicadores', proceso['ind_score'], 'bi-bar-chart-line', 'success', 'indicadores', 'proceso_id=' ~ proceso['id']),
+        ('Caracterización', proceso['car_score'], 'bi-card-checklist', 'info', 'caracterizacion', 'proceso_id=' ~ proceso['id']),
+        ('Normograma', proceso['norm_score'], 'bi-journal-bookmark', 'warning', 'normograma', 'proceso_id=' ~ proceso['id']),
+        ('M. Riesgos', proceso['risk_score'], 'bi-exclamation-triangle', 'danger', 'riesgos', 'proceso_id=' ~ proceso['id']),
+    ] %}
+    {% for label, score, icon, color, route, param in componentes %}
+    {% set s = semaforo(score) %}
+    <div class="col-sm-6 col-lg">
+        <div class="card h-100" style="border-top:3px solid {{ semaforo_color(score) }}">
+            <div class="card-body text-center py-3">
+                <i class="bi {{ icon }} fs-3 text-{{ color }}"></i>
+                <div class="fw-bold mt-1" style="font-size:1.4rem; color:{{ semaforo_color(score) }}">
+                    {{ "%.0f"|format(score*100) }}%
+                </div>
+                <div class="small text-muted">{{ label }}</div>
+                <span class="badge-semaforo badge-{{ s }} mt-1"></span>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+    <div class="col-sm-6 col-lg">
+        <div class="card h-100" style="border-top:3px solid {{ semaforo_color(proceso['ponderacion']) }}; background: #f8f9fa;">
+            <div class="card-body text-center py-3">
+                <i class="bi bi-trophy fs-3" style="color:{{ semaforo_color(proceso['ponderacion']) }}"></i>
+                <div class="fw-bold mt-1" style="font-size:1.4rem; color:{{ semaforo_color(proceso['ponderacion']) }}">
+                    {{ "%.1f"|format(proceso['ponderacion']*100) }}%
+                </div>
+                <div class="small text-muted">Ponderación Total</div>
+                <span class="badge-semaforo badge-{{ sem }} mt-1"></span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- TABS -->
+<div class="card">
+    <div class="card-header bg-white">
+        <ul class="nav nav-tabs card-header-tabs" id="detalleTabs">
+            <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#tab-proc"><i class="bi bi-file-earmark-text me-1"></i>Procedimientos <span class="badge bg-primary rounded-pill">{{ procedimientos|length }}</span></a></li>
+            <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-ind"><i class="bi bi-bar-chart-line me-1"></i>Indicadores <span class="badge bg-success rounded-pill">{{ indicadores|length }}</span></a></li>
+            <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-car"><i class="bi bi-card-checklist me-1"></i>Caracterización <span class="badge bg-info rounded-pill">{{ caracterizaciones|length }}</span></a></li>
+            <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-norm"><i class="bi bi-journal-bookmark me-1"></i>Normograma <span class="badge bg-warning rounded-pill">{{ normogramas|length }}</span></a></li>
+            <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-risk"><i class="bi bi-exclamation-triangle me-1"></i>Riesgos <span class="badge bg-danger rounded-pill">{{ riesgos|length }}</span></a></li>
+        </ul>
+    </div>
+    <div class="card-body">
+        <div class="tab-content">
+            <!-- PROCEDIMIENTOS -->
+            <div class="tab-pane fade show active" id="tab-proc">
+                <div class="d-flex justify-content-end mb-2">
+                    <a href="{{ url_for('procedimiento_nuevo', proceso_id=proceso['id']) }}" class="btn btn-sm btn-primary"><i class="bi bi-plus-lg me-1"></i>Agregar</a>
+                </div>
+                {% if procedimientos %}
+                <table class="table table-sm align-middle">
+                    <thead class="table-light"><tr><th>Código</th><th>Nombre</th><th>Estado</th><th>OneDrive</th><th>Responsable</th><th>Versión</th><th></th></tr></thead>
+                    <tbody>
+                        {% for pr in procedimientos %}
+                        <tr>
+                            <td class="small text-muted">{{ pr['codigo'] }}</td>
+                            <td class="small">{{ pr['nombre'] }}</td>
+                            <td><span class="badge bg-light text-dark border estado-badge">{{ pr['estado'] }}</span></td>
+                            <td class="text-center"><span class="badge {% if pr['publicado_onedrive'] == 'SI' %}bg-success{% else %}bg-secondary{% endif %}">{{ pr['publicado_onedrive'] }}</span></td>
+                            <td class="small">{{ pr['responsable'] or '—' }}</td>
+                            <td class="small">{{ pr['version'] }}</td>
+                            <td>
+                                <a href="{{ url_for('procedimiento_editar', id=pr['id']) }}" class="btn btn-xs btn-outline-primary" style="padding:1px 6px; font-size:0.75rem"><i class="bi bi-pencil"></i></a>
+                                <form method="post" action="{{ url_for('procedimiento_eliminar', id=pr['id']) }}" class="d-inline" onsubmit="return confirm('¿Eliminar?')">
+                                    <button class="btn btn-xs btn-outline-danger" style="padding:1px 6px; font-size:0.75rem"><i class="bi bi-trash"></i></button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}<p class="text-muted">No hay procedimientos registrados.</p>{% endif %}
+            </div>
+
+            <!-- INDICADORES -->
+            <div class="tab-pane fade" id="tab-ind">
+                <div class="d-flex justify-content-end mb-2">
+                    <a href="{{ url_for('indicador_nuevo', proceso_id=proceso['id']) }}" class="btn btn-sm btn-success"><i class="bi bi-plus-lg me-1"></i>Agregar</a>
+                </div>
+                {% if indicadores %}
+                <table class="table table-sm align-middle">
+                    <thead class="table-light"><tr><th>Código</th><th>Nombre</th><th>Estado</th><th>Fórmula</th><th>Meta</th><th>Frecuencia</th><th></th></tr></thead>
+                    <tbody>
+                        {% for i in indicadores %}
+                        <tr>
+                            <td class="small text-muted">{{ i['codigo'] }}</td>
+                            <td class="small">{{ i['nombre'] }}</td>
+                            <td><span class="badge bg-light text-dark border estado-badge">{{ i['estado'] }}</span></td>
+                            <td class="small">{{ i['formula'] or '—' }}</td>
+                            <td class="small">{{ i['meta'] or '—' }}</td>
+                            <td class="small">{{ i['frecuencia'] or '—' }}</td>
+                            <td>
+                                <a href="{{ url_for('indicador_editar', id=i['id']) }}" class="btn btn-xs btn-outline-primary" style="padding:1px 6px; font-size:0.75rem"><i class="bi bi-pencil"></i></a>
+                                <form method="post" action="{{ url_for('indicador_eliminar', id=i['id']) }}" class="d-inline" onsubmit="return confirm('¿Eliminar?')">
+                                    <button class="btn btn-xs btn-outline-danger" style="padding:1px 6px; font-size:0.75rem"><i class="bi bi-trash"></i></button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}<p class="text-muted">No hay indicadores registrados.</p>{% endif %}
+            </div>
+
+            <!-- CARACTERIZACIÓN -->
+            <div class="tab-pane fade" id="tab-car">
+                <div class="d-flex justify-content-end mb-2">
+                    <a href="{{ url_for('caracterizacion_nuevo', proceso_id=proceso['id']) }}" class="btn btn-sm btn-info"><i class="bi bi-plus-lg me-1"></i>Agregar</a>
+                </div>
+                {% if caracterizaciones %}
+                {% for c in caracterizaciones %}
+                <div class="border rounded p-3 mb-3">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div><strong>Versión {{ c['version'] }}</strong> — <span class="badge bg-secondary">{{ c['estado'] }}</span></div>
+                        <div>
+                            <a href="{{ url_for('caracterizacion_editar', id=c['id']) }}" class="btn btn-sm btn-outline-primary"><i class="bi bi-pencil"></i></a>
+                            <form method="post" action="{{ url_for('caracterizacion_eliminar', id=c['id']) }}" class="d-inline" onsubmit="return confirm('¿Eliminar?')">
+                                <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
+                            </form>
+                        </div>
+                    </div>
+                    <div class="row mt-2 small">
+                        <div class="col-md-6"><strong>Objetivo:</strong> {{ c['objetivo'] or '—' }}</div>
+                        <div class="col-md-6"><strong>Alcance:</strong> {{ c['alcance'] or '—' }}</div>
+                        <div class="col-md-6 mt-1"><strong>Proveedor:</strong> {{ c['proveedor'] or '—' }}</div>
+                        <div class="col-md-6 mt-1"><strong>Cliente:</strong> {{ c['cliente'] or '—' }}</div>
+                    </div>
+                </div>
+                {% endfor %}
+                {% else %}<p class="text-muted">No hay caracterización registrada.</p>{% endif %}
+            </div>
+
+            <!-- NORMOGRAMA -->
+            <div class="tab-pane fade" id="tab-norm">
+                <div class="d-flex justify-content-end mb-2">
+                    <a href="{{ url_for('normograma_nuevo', proceso_id=proceso['id']) }}" class="btn btn-sm btn-warning"><i class="bi bi-plus-lg me-1"></i>Agregar Norma</a>
+                </div>
+                {% if normogramas %}
+                <table class="table table-sm align-middle">
+                    <thead class="table-light"><tr><th>Tipo</th><th>Número/Año</th><th>Entidad</th><th>Título</th><th>Vigente</th><th></th></tr></thead>
+                    <tbody>
+                        {% for n in normogramas %}
+                        <tr>
+                            <td><span class="badge bg-light text-dark border small">{{ n['tipo_norma'] }}</span></td>
+                            <td class="small fw-bold">{{ n['numero'] }}/{{ n['año'] }}</td>
+                            <td class="small">{{ n['entidad_expide'] or '—' }}</td>
+                            <td class="small">{{ n['titulo'][:60] }}{% if n['titulo']|length > 60 %}…{% endif %}</td>
+                            <td><span class="badge {% if n['vigente'] %}bg-success{% else %}bg-secondary{% endif %}">{{ 'Sí' if n['vigente'] else 'No' }}</span></td>
+                            <td>
+                                <a href="{{ url_for('normograma_editar', id=n['id']) }}" class="btn btn-xs btn-outline-primary" style="padding:1px 6px; font-size:0.75rem"><i class="bi bi-pencil"></i></a>
+                                <form method="post" action="{{ url_for('normograma_eliminar', id=n['id']) }}" class="d-inline" onsubmit="return confirm('¿Eliminar?')">
+                                    <button class="btn btn-xs btn-outline-danger" style="padding:1px 6px; font-size:0.75rem"><i class="bi bi-trash"></i></button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}<p class="text-muted">No hay normas registradas.</p>{% endif %}
+            </div>
+
+            <!-- RIESGOS -->
+            <div class="tab-pane fade" id="tab-risk">
+                <div class="d-flex justify-content-end mb-2">
+                    <a href="{{ url_for('riesgo_nuevo', proceso_id=proceso['id']) }}" class="btn btn-sm btn-danger"><i class="bi bi-plus-lg me-1"></i>Agregar Riesgo</a>
+                </div>
+                {% if riesgos %}
+                <table class="table table-sm align-middle">
+                    <thead class="table-light"><tr><th>Código</th><th>Riesgo</th><th>Tipo</th><th class="text-center">Prob.</th><th class="text-center">Impacto</th><th>Nivel</th><th>Responsable</th><th></th></tr></thead>
+                    <tbody>
+                        {% for r in riesgos %}
+                        <tr>
+                            <td class="small text-muted">{{ r['codigo'] }}</td>
+                            <td class="small fw-medium">{{ r['nombre'] }}</td>
+                            <td><span class="badge bg-light text-dark border small">{{ r['tipo_riesgo'] }}</span></td>
+                            <td class="text-center small">{{ r['probabilidad'] }}</td>
+                            <td class="text-center small">{{ r['impacto'] }}</td>
+                            <td>
+                                {% set nivel_col = {'Extremo':'danger','Alto':'warning','Moderado':'info','Bajo':'success'} %}
+                                <span class="badge bg-{{ nivel_col.get(r['nivel_riesgo'], 'secondary') }}">{{ r['nivel_riesgo'] }}</span>
+                            </td>
+                            <td class="small">{{ r['responsable'] or '—' }}</td>
+                            <td>
+                                <a href="{{ url_for('riesgo_editar', id=r['id']) }}" class="btn btn-xs btn-outline-primary" style="padding:1px 6px; font-size:0.75rem"><i class="bi bi-pencil"></i></a>
+                                <form method="post" action="{{ url_for('riesgo_eliminar', id=r['id']) }}" class="d-inline" onsubmit="return confirm('¿Eliminar?')">
+                                    <button class="btn btn-xs btn-outline-danger" style="padding:1px 6px; font-size:0.75rem"><i class="bi bi-trash"></i></button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}<p class="text-muted">No hay riesgos registrados.</p>{% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

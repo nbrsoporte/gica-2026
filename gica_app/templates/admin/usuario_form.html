@@ -1,0 +1,180 @@
+{% extends 'base.html' %}
+{% block title %}{{ 'Editar' if usuario else 'Nuevo' }} Usuario — GICA{% endblock %}
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{{ url_for('dashboard') }}">Inicio</a></li>
+<li class="breadcrumb-item"><a href="{{ url_for('usuarios_list') }}">Usuarios</a></li>
+<li class="breadcrumb-item active">{{ 'Editar' if usuario else 'Nuevo' }}</li>
+{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+<div class="col-lg-7">
+<div class="card">
+    <div class="card-header bg-white">
+        <strong><i class="bi bi-person-gear me-2"></i>{{ 'Editar' if usuario else 'Nuevo' }} Usuario</strong>
+    </div>
+    <div class="card-body">
+        <form method="post">
+            <div class="row">
+                <div class="col-md-5 mb-3">
+                    <label class="form-label">Nombre de Usuario <span class="text-danger">*</span></label>
+                    {% if usuario %}
+                    <input type="text" class="form-control" value="{{ usuario['username'] }}" disabled>
+                    {% else %}
+                    <input type="text" name="username" class="form-control" required
+                           pattern="[a-zA-Z0-9._-]+" title="Solo letras, números, puntos, guiones"
+                           placeholder="Ej: juan.perez">
+                    <small class="text-muted">Solo letras, números, puntos y guiones</small>
+                    {% endif %}
+                </div>
+                <div class="col-md-7 mb-3">
+                    <label class="form-label">Nombre Completo <span class="text-danger">*</span></label>
+                    <input type="text" name="nombre_completo" class="form-control" required
+                           value="{{ usuario['nombre_completo'] if usuario else '' }}">
+                </div>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">Correo Electrónico</label>
+                <input type="email" name="email" class="form-control"
+                       value="{{ usuario['email'] if usuario else '' }}">
+            </div>
+
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Rol <span class="text-danger">*</span></label>
+                    <select name="rol_id" class="form-select" required>
+                        <option value="">-- Seleccione --</option>
+                        {% for r in roles %}
+                        {% set rol_col = {1:'danger',2:'primary',3:'success',4:'secondary'} %}
+                        <option value="{{ r['id'] }}"
+                            {% if usuario and usuario['rol_id'] == r['id'] %}selected{% endif %}>
+                            {{ r['nombre'] }} (Nivel {{ r['nivel'] }})
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Proceso Asignado</label>
+                    <select name="proceso_id" class="form-select">
+                        <option value="">Sin proceso específico (acceso global)</option>
+                        {% for p in procesos %}
+                        <option value="{{ p['id'] }}"
+                            {% if usuario and usuario['proceso_id'] == p['id'] %}selected{% endif %}>
+                            {{ p['nombre'][:50] }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                    <small class="text-muted">Solo para Líderes de Proceso</small>
+                </div>
+            </div>
+
+            <!-- Contraseña -->
+            <div class="border rounded p-3 mb-3 bg-light">
+                <h6 class="text-secondary">
+                    <i class="bi bi-key me-1"></i>
+                    {{ 'Contraseña' if not usuario else 'Cambiar Contraseña' }}
+                </h6>
+                {% if usuario %}
+                <div class="alert alert-info py-2 small mb-2">
+                    Deje en blanco para conservar la contraseña actual.
+                </div>
+                <div class="mb-2">
+                    <label class="form-label small">Nueva Contraseña (opcional)</label>
+                    <div class="input-group">
+                        <input type="password" name="nueva_password" id="pwd" class="form-control"
+                               minlength="8" placeholder="Mínimo 8 caracteres">
+                        <button type="button" class="btn btn-outline-secondary" onclick="togglePwd()">
+                            <i class="bi bi-eye" id="eyePwd"></i>
+                        </button>
+                    </div>
+                </div>
+                {% else %}
+                <div class="mb-2">
+                    <label class="form-label small">Contraseña <span class="text-danger">*</span></label>
+                    <div class="input-group">
+                        <input type="password" name="password" id="pwd" class="form-control"
+                               required minlength="8" placeholder="Mínimo 8 caracteres">
+                        <button type="button" class="btn btn-outline-secondary" onclick="togglePwd()">
+                            <i class="bi bi-eye" id="eyePwd"></i>
+                        </button>
+                    </div>
+                </div>
+                {% endif %}
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" name="debe_cambiar_password"
+                           id="cambiarPwd"
+                           {% if not usuario or usuario['debe_cambiar_password'] %}checked{% endif %}>
+                    <label class="form-check-label small" for="cambiarPwd">
+                        El usuario debe cambiar la contraseña en el próximo inicio de sesión
+                    </label>
+                </div>
+            </div>
+
+            {% if usuario %}
+            <div class="mb-3">
+                <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" name="activo" id="activo"
+                           {% if usuario['activo'] %}checked{% endif %}>
+                    <label class="form-check-label" for="activo">
+                        <strong>Usuario Activo</strong>
+                        <small class="text-muted">(desactivar bloquea el acceso sin eliminar el usuario)</small>
+                    </label>
+                </div>
+            </div>
+            {% endif %}
+
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-save me-1"></i>Guardar
+                </button>
+                <a href="{{ url_for('usuarios_list') }}" class="btn btn-outline-secondary">Cancelar</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Descripción de roles -->
+<div class="card mt-3">
+    <div class="card-header bg-white"><strong><i class="bi bi-info-circle me-1"></i>Descripción de Roles</strong></div>
+    <div class="card-body p-0">
+        <table class="table table-sm mb-0">
+            <thead class="table-light"><tr><th>Rol</th><th>Nivel</th><th>Ver</th><th>Crear</th><th>Editar</th><th>Eliminar</th><th>Usuarios</th></tr></thead>
+            <tbody>
+                {% for r in roles %}
+                {% set bools = {'puede_crear':r['puede_crear'],'puede_editar':r['puede_editar'],'puede_eliminar':r['puede_eliminar'],'puede_admin_usuarios':r['puede_admin_usuarios']} %}
+                <tr>
+                    <td class="fw-medium small">{{ r['nombre'] }}</td>
+                    <td><span class="badge bg-secondary">{{ r['nivel'] }}</span></td>
+                    {% for field in ['', 'puede_crear','puede_editar','puede_eliminar','puede_admin_usuarios'] %}
+                    {% if field == '' %}
+                    <td class="text-center"><i class="bi bi-check-circle-fill text-success"></i></td>
+                    {% else %}
+                    <td class="text-center">
+                        {% if r[field] %}
+                        <i class="bi bi-check-circle-fill text-success"></i>
+                        {% else %}
+                        <i class="bi bi-x-circle text-muted"></i>
+                        {% endif %}
+                    </td>
+                    {% endif %}
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+</div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+function togglePwd() {
+    const inp = document.getElementById('pwd');
+    const icon = document.getElementById('eyePwd');
+    if (inp.type === 'password') { inp.type = 'text'; icon.className = 'bi bi-eye-slash'; }
+    else { inp.type = 'password'; icon.className = 'bi bi-eye'; }
+}
+</script>
+{% endblock %}

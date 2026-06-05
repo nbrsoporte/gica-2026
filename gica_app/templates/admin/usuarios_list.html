@@ -1,0 +1,129 @@
+{% extends 'base.html' %}
+{% block title %}Gestión de Usuarios — GICA{% endblock %}
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{{ url_for('dashboard') }}">Inicio</a></li>
+<li class="breadcrumb-item active">Usuarios</li>
+{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h4 class="mb-0 fw-bold"><i class="bi bi-people me-2"></i>Gestión de Usuarios</h4>
+        <small class="text-muted">Administración de acceso al sistema GICA</small>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="{{ url_for('roles_list') }}" class="btn btn-outline-secondary">
+            <i class="bi bi-shield me-1"></i>Roles
+        </a>
+        <a href="{{ url_for('auditoria') }}" class="btn btn-outline-info">
+            <i class="bi bi-clock-history me-1"></i>Auditoría
+        </a>
+        <a href="{{ url_for('usuario_nuevo') }}" class="btn btn-primary">
+            <i class="bi bi-person-plus me-1"></i>Nuevo Usuario
+        </a>
+    </div>
+</div>
+
+<!-- Estadísticas -->
+<div class="row g-3 mb-4">
+    <div class="col-sm-3">
+        <div class="card text-center p-3">
+            <div class="fs-2 fw-bold text-primary">{{ usuarios|length }}</div>
+            <div class="small text-muted">Total Usuarios</div>
+        </div>
+    </div>
+    <div class="col-sm-3">
+        <div class="card text-center p-3">
+            <div class="fs-2 fw-bold text-success">{{ usuarios|selectattr('activo','equalto',1)|list|length }}</div>
+            <div class="small text-muted">Activos</div>
+        </div>
+    </div>
+    <div class="col-sm-3">
+        <div class="card text-center p-3">
+            <div class="fs-2 fw-bold text-danger">{{ usuarios|selectattr('activo','equalto',0)|list|length }}</div>
+            <div class="small text-muted">Inactivos</div>
+        </div>
+    </div>
+    <div class="col-sm-3">
+        <div class="card text-center p-3">
+            <div class="fs-2 fw-bold text-warning">{{ usuarios|selectattr('debe_cambiar_password','equalto',1)|list|length }}</div>
+            <div class="small text-muted">Deben cambiar pwd</div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+        <table class="table table-hover mb-0 align-middle datatable">
+            <thead class="table-light">
+                <tr>
+                    <th>Usuario</th><th>Nombre Completo</th><th>Email</th>
+                    <th>Rol</th><th>Proceso Asignado</th>
+                    <th class="text-center">Estado</th><th>Último Acceso</th>
+                    <th style="width:140px">Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for u in usuarios %}
+                {% set rol_col = {1:'danger',2:'primary',3:'success',4:'secondary'} %}
+                <tr class="{% if not u['activo'] %}table-secondary text-muted{% endif %}">
+                    <td>
+                        <div class="d-flex align-items-center gap-2">
+                            <div class="rounded-circle bg-{{ rol_col.get(u['rol_nivel'], 'secondary') }} text-white d-flex align-items-center justify-content-center fw-bold"
+                                 style="width:32px;height:32px;font-size:.85rem;flex-shrink:0;">
+                                {{ u['nombre_completo'][0].upper() if u['nombre_completo'] else '?' }}
+                            </div>
+                            <div>
+                                <div class="fw-medium small">{{ u['username'] }}</div>
+                                {% if u['debe_cambiar_password'] %}
+                                <small class="text-warning"><i class="bi bi-key"></i> Debe cambiar pwd</small>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </td>
+                    <td class="small">{{ u['nombre_completo'] }}</td>
+                    <td class="small text-muted">{{ u['email'] or '—' }}</td>
+                    <td>
+                        <span class="badge bg-{{ rol_col.get(u['rol_nivel'], 'secondary') }}">
+                            {{ u['rol_nombre'] or 'Sin rol' }}
+                        </span>
+                    </td>
+                    <td class="small text-muted">{{ u['proceso_nombre'] or '—' }}</td>
+                    <td class="text-center">
+                        {% if u['activo'] %}
+                        <span class="badge bg-success"><i class="bi bi-circle-fill me-1" style="font-size:.5rem"></i>Activo</span>
+                        {% else %}
+                        <span class="badge bg-secondary"><i class="bi bi-circle me-1" style="font-size:.5rem"></i>Inactivo</span>
+                        {% endif %}
+                    </td>
+                    <td class="small text-muted">{{ u['ultimo_acceso'] or 'Nunca' }}</td>
+                    <td>
+                        <a href="{{ url_for('usuario_editar', id=u['id']) }}"
+                           class="btn btn-sm btn-outline-primary" title="Editar">
+                            <i class="bi bi-pencil"></i>
+                        </a>
+                        {% if u['id'] != session_user.id %}
+                        <form method="post" action="{{ url_for('usuario_toggle', id=u['id']) }}" class="d-inline">
+                            <button class="btn btn-sm {% if u['activo'] %}btn-outline-warning{% else %}btn-outline-success{% endif %}"
+                                    title="{{ 'Desactivar' if u['activo'] else 'Activar' }}">
+                                <i class="bi bi-{{ 'toggle-on' if u['activo'] else 'toggle-off' }}"></i>
+                            </button>
+                        </form>
+                        <form method="post" action="{{ url_for('usuario_eliminar', id=u['id']) }}" class="d-inline"
+                              onsubmit="return confirm('¿Eliminar el usuario {{ u.username }}?')">
+                            <button class="btn btn-sm btn-outline-danger" title="Eliminar">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </form>
+                        {% else %}
+                        <span class="text-muted small">Tu cuenta</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

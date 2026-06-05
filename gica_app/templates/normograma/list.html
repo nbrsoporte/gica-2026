@@ -1,0 +1,66 @@
+{% extends 'base.html' %}
+{% block title %}Normograma - GICA{% endblock %}
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{{ url_for('dashboard') }}">Inicio</a></li>
+<li class="breadcrumb-item active">Normograma</li>
+{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+        <h4 class="mb-0 fw-bold"><i class="bi bi-journal-bookmark me-2"></i>Normograma</h4>
+        <small class="text-muted">Registro normativo de la Secretaría de Salud Departamental</small>
+    </div>
+    <a href="{{ url_for('normograma_nuevo') }}" class="btn btn-warning"><i class="bi bi-plus-lg me-1"></i>Nueva Norma</a>
+</div>
+<div class="card mb-3">
+    <div class="card-body py-2">
+        <form method="get" class="d-flex align-items-center gap-3">
+            <label class="small fw-bold text-muted mb-0">Filtrar por proceso:</label>
+            <select name="proceso_id" class="form-select form-select-sm" style="max-width:350px;" onchange="this.form.submit()">
+                <option value="">Todos</option>
+                {% for p in procesos %}
+                <option value="{{ p['id'] }}" {% if filtro_proceso == p['id']|string %}selected{% endif %}>{{ p['nombre'] }}</option>
+                {% endfor %}
+            </select>
+            {% if filtro_proceso %}<a href="{{ url_for('normograma') }}" class="btn btn-sm btn-outline-secondary">Limpiar</a>{% endif %}
+        </form>
+    </div>
+</div>
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+        <table class="table table-hover mb-0 align-middle datatable">
+            <thead class="table-light">
+                <tr><th>Tipo</th><th>Número</th><th>Año</th><th>Entidad</th><th>Título</th><th>Proceso</th><th>Fecha Exp.</th><th class="text-center">Vigente</th><th style="width:100px">Acciones</th></tr>
+            </thead>
+            <tbody>
+                {% for n in normas %}
+                <tr>
+                    <td><span class="badge bg-light text-dark border small">{{ n['tipo_norma'] }}</span></td>
+                    <td class="fw-bold small">{{ n['numero'] }}</td>
+                    <td class="small">{{ n['año'] }}</td>
+                    <td class="small text-muted">{{ n['entidad_expide'][:30] if n['entidad_expide'] else '—' }}{% if n['entidad_expide'] and n['entidad_expide']|length > 30 %}…{% endif %}</td>
+                    <td class="small">
+                        {% if n['enlace'] %}
+                        <a href="{{ n['enlace'] }}" target="_blank" rel="noopener">{{ n['titulo'][:60] }}{% if n['titulo']|length > 60 %}…{% endif %} <i class="bi bi-box-arrow-up-right"></i></a>
+                        {% else %}
+                        {{ n['titulo'][:70] }}{% if n['titulo']|length > 70 %}…{% endif %}
+                        {% endif %}
+                    </td>
+                    <td class="small text-muted">{{ n['proceso_nombre'][:25] }}{% if n['proceso_nombre']|length > 25 %}…{% endif %}</td>
+                    <td class="small">{{ n['fecha_expedicion'] or '—' }}</td>
+                    <td class="text-center"><span class="badge {% if n['vigente'] %}bg-success{% else %}bg-secondary{% endif %}">{{ 'Vigente' if n['vigente'] else 'Derogada' }}</span></td>
+                    <td>
+                        <a href="{{ url_for('normograma_editar', id=n['id']) }}" class="btn btn-sm btn-outline-primary"><i class="bi bi-pencil"></i></a>
+                        <form method="post" action="{{ url_for('normograma_eliminar', id=n['id']) }}" class="d-inline" onsubmit="return confirm('¿Eliminar esta norma?')">
+                            <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,71 @@
+{% extends 'base.html' %}
+{% block title %}{{ 'Editar' if rol else 'Nuevo' }} Rol — GICA{% endblock %}
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{{ url_for('dashboard') }}">Inicio</a></li>
+<li class="breadcrumb-item"><a href="{{ url_for('roles_list') }}">Roles</a></li>
+<li class="breadcrumb-item active">{{ 'Editar' if rol else 'Nuevo' }}</li>
+{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+<div class="col-lg-6">
+<div class="card">
+    <div class="card-header bg-white"><strong><i class="bi bi-shield me-2"></i>{{ 'Editar' if rol else 'Nuevo' }} Rol</strong></div>
+    <div class="card-body">
+        <form method="post">
+            <div class="row">
+                <div class="col-md-8 mb-3">
+                    <label class="form-label">Nombre del Rol <span class="text-danger">*</span></label>
+                    <input type="text" name="nombre" class="form-control" required
+                           value="{{ rol['nombre'] if rol else '' }}" placeholder="Ej: Supervisor de Calidad">
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label class="form-label">Nivel de Acceso <span class="text-danger">*</span></label>
+                    <select name="nivel" class="form-select" required>
+                        {% for n in range(1,6) %}
+                        <option value="{{ n }}" {% if rol and rol['nivel'] == n %}selected{% endif %}>
+                            {{ n }} — {{ {1:'Admin',2:'GICA',3:'Proceso',4:'Consultor',5:'Solo lectura'}.get(n,'Nivel '+n|string) }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Descripción</label>
+                <textarea name="descripcion" class="form-control" rows="2">{{ rol['descripcion'] if rol else '' }}</textarea>
+            </div>
+
+            <div class="border rounded p-3 mb-4 bg-light">
+                <h6 class="text-secondary mb-3"><i class="bi bi-toggles me-1"></i>Permisos</h6>
+                <div class="row g-2">
+                    {% set perms = [
+                        ('puede_crear','Crear registros','bi-plus-circle','success'),
+                        ('puede_editar','Editar registros','bi-pencil','warning'),
+                        ('puede_eliminar','Eliminar registros','bi-trash','danger'),
+                        ('puede_admin_usuarios','Administrar usuarios','bi-people','dark'),
+                    ] %}
+                    {% for field, label, icon, color in perms %}
+                    <div class="col-12">
+                        <div class="form-check form-switch d-flex align-items-center gap-2">
+                            <input class="form-check-input" type="checkbox" name="{{ field }}"
+                                   id="{{ field }}" role="switch"
+                                   {% if rol and rol[field] %}checked{% endif %}>
+                            <label class="form-check-label d-flex align-items-center gap-2" for="{{ field }}">
+                                <i class="bi {{ icon }} text-{{ color }}"></i>
+                                {{ label }}
+                            </label>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">Guardar</button>
+                <a href="{{ url_for('roles_list') }}" class="btn btn-outline-secondary">Cancelar</a>
+            </div>
+        </form>
+    </div>
+</div>
+</div>
+</div>
+{% endblock %}

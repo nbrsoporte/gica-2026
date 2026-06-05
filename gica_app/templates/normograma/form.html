@@ -1,0 +1,84 @@
+{% extends 'base.html' %}
+{% block title %}{{ 'Editar' if norma else 'Nueva' }} Norma - Normograma{% endblock %}
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{{ url_for('dashboard') }}">Inicio</a></li>
+<li class="breadcrumb-item"><a href="{{ url_for('normograma') }}">Normograma</a></li>
+<li class="breadcrumb-item active">{{ 'Editar' if norma else 'Nueva' }}</li>
+{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+<div class="col-lg-9">
+<div class="card">
+    <div class="card-header bg-white"><strong><i class="bi bi-journal-bookmark me-2"></i>{{ 'Editar' if norma else 'Registrar Nueva' }} Norma</strong></div>
+    <div class="card-body">
+        <form method="post">
+            <div class="row">
+                <div class="col-md-4 mb-3">
+                    <label class="form-label">Tipo de Norma <span class="text-danger">*</span></label>
+                    <select name="tipo_norma" class="form-select" required>
+                        {% for t in ['Ley','Decreto','Resolución','Circular','Acuerdo','Directiva','Concepto','Sentencia','Ordenanza','Manual','Protocolo'] %}
+                        <option value="{{ t }}" {% if norma and norma['tipo_norma'] == t %}selected{% endif %}>{{ t }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label class="form-label">Número</label>
+                    <input type="text" name="numero" class="form-control" value="{{ norma['numero'] if norma else '' }}" placeholder="Ej: 2674">
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label class="form-label">Año</label>
+                    <input type="text" name="año" class="form-control" value="{{ norma['año'] if norma else '' }}" placeholder="2024">
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Entidad que Expide</label>
+                    <input type="text" name="entidad_expide" class="form-control" value="{{ norma['entidad_expide'] if norma else '' }}" placeholder="Ministerio de Salud...">
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Proceso Relacionado <span class="text-danger">*</span></label>
+                    <select name="proceso_id" class="form-select" required>
+                        <option value="">-- Seleccione --</option>
+                        {% for p in procesos %}
+                        <option value="{{ p['id'] }}" {% if (norma and norma['proceso_id'] == p['id']) or (selected_proceso and selected_proceso == p['id']|string) %}selected{% endif %}>
+                            {{ p['codigo'] }} - {{ p['nombre'] }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Título / Denominación <span class="text-danger">*</span></label>
+                <input type="text" name="titulo" class="form-control" value="{{ norma['titulo'] if norma else '' }}" required>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Descripción / Objeto</label>
+                <textarea name="descripcion" class="form-control" rows="3">{{ norma['descripcion'] if norma else '' }}</textarea>
+            </div>
+            <div class="row">
+                <div class="col-md-4 mb-3">
+                    <label class="form-label">Fecha de Expedición</label>
+                    <input type="date" name="fecha_expedicion" class="form-control" value="{{ norma['fecha_expedicion'] if norma else '' }}">
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label class="form-label">Enlace (URL)</label>
+                    <input type="url" name="enlace" class="form-control" value="{{ norma['enlace'] if norma else '' }}" placeholder="https://...">
+                </div>
+                <div class="col-md-4 mb-3 d-flex align-items-end">
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" name="vigente" id="vigente"
+                               {% if not norma or norma['vigente'] %}checked{% endif %}>
+                        <label class="form-check-label" for="vigente">Norma Vigente</label>
+                    </div>
+                </div>
+            </div>
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-warning">Guardar</button>
+                <a href="{{ url_for('normograma') }}" class="btn btn-outline-secondary">Cancelar</a>
+            </div>
+        </form>
+    </div>
+</div>
+</div>
+</div>
+{% endblock %}
