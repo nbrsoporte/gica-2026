@@ -23,7 +23,18 @@ except ImportError:
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('GICA_SECRET_KEY', 'gica$secretaria#salud@2026_XK9!')
-DB_PATH = os.path.join(os.path.dirname(__file__), 'gica.db')
+DB_PATH = os.environ.get('DB_PATH', os.path.join(os.path.dirname(__file__), 'gica.db'))
+
+
+def _ensure_db():
+    """Inicializa la BD automáticamente si no existe (útil en Railway)."""
+    if not os.path.exists(DB_PATH):
+        import subprocess, sys
+        init_script = os.path.join(os.path.dirname(__file__), 'init_db.py')
+        subprocess.run([sys.executable, init_script], check=True)
+
+
+_ensure_db()
 
 
 # ─── DB ───────────────────────────────────────────────────────────────────────
@@ -1566,4 +1577,6 @@ def api_ponderacion_data():
 
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    port = int(os.environ.get('PORT', 5000))
+    debug = os.environ.get('FLASK_DEBUG', '0') == '1'
+    app.run(host='0.0.0.0', port=port, debug=debug)

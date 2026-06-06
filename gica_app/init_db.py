@@ -3,7 +3,7 @@ import sqlite3
 import os
 from werkzeug.security import generate_password_hash
 
-DB_PATH = os.path.join(os.path.dirname(__file__), 'gica.db')
+DB_PATH = os.environ.get('DB_PATH', os.path.join(os.path.dirname(__file__), 'gica.db'))
 
 
 SCHEMA = """
