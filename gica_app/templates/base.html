@@ -166,6 +166,14 @@
             </a>
         </li>
 
+        <li><div class="nav-divider"></div></li>
+        <li><div class="nav-section">Análisis</div></li>
+        <li class="nav-item">
+            <a href="{{ url_for('comparativo') }}" class="nav-link {% if 'comparativo' in (request.endpoint or '') %}active{% endif %}">
+                <i class="bi bi-bar-chart-steps"></i> Comparativo
+            </a>
+        </li>
+
         {% if session_user and session_user.rol_nivel == 1 %}
         <li><div class="nav-divider"></div></li>
         <li><div class="nav-section">Administración</div></li>
@@ -177,6 +185,11 @@
         <li class="nav-item">
             <a href="{{ url_for('roles_list') }}" class="nav-link {% if 'rol' in (request.endpoint or '') %}active{% endif %}">
                 <i class="bi bi-shield"></i> Roles
+            </a>
+        </li>
+        <li class="nav-item">
+            <a href="{{ url_for('vigencias_list') }}" class="nav-link {% if 'vigencia' in (request.endpoint or '') %}active{% endif %}">
+                <i class="bi bi-calendar3"></i> Vigencias
             </a>
         </li>
         <li class="nav-item">
@@ -255,6 +268,37 @@
                     </button>
                 </div>
             </form>
+            {% if session_user and todas_vigencias|length > 0 %}
+            <div class="dropdown">
+                <button class="btn btn-sm btn-outline-primary dropdown-toggle d-flex align-items-center gap-1"
+                        data-bs-toggle="dropdown" title="Cambiar vigencia activa">
+                    <i class="bi bi-calendar3"></i>
+                    <span class="d-none d-md-inline small">
+                        {{ vigencia_actual.nombre if vigencia_actual else 'Sin vigencia' }}
+                    </span>
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end" style="min-width:200px;">
+                    <li><div class="dropdown-header small text-uppercase fw-bold">Cambiar Vigencia</div></li>
+                    {% for v in todas_vigencias %}
+                    <li>
+                        <form method="post" action="{{ url_for('cambiar_vigencia', vid=v.id) }}" class="d-inline">
+                            <button type="submit"
+                                    class="dropdown-item small d-flex justify-content-between align-items-center
+                                           {% if vigencia_actual and vigencia_actual.id == v.id %}fw-bold text-primary{% endif %}">
+                                {{ v.nombre }}
+                                {% if v.activa %}<span class="badge bg-success ms-2" style="font-size:.6rem;">Activa</span>{% endif %}
+                                {% if vigencia_actual and vigencia_actual.id == v.id %}<i class="bi bi-check2 ms-1 text-primary"></i>{% endif %}
+                            </button>
+                        </form>
+                    </li>
+                    {% endfor %}
+                    {% if session_user.rol_nivel == 1 %}
+                    <li><hr class="dropdown-divider"></li>
+                    <li><a class="dropdown-item small" href="{{ url_for('vigencias_list') }}"><i class="bi bi-gear me-2"></i>Gestionar vigencias</a></li>
+                    {% endif %}
+                </ul>
+            </div>
+            {% endif %}
             <div class="small text-muted d-none d-sm-block">
                 <i class="bi bi-calendar3 me-1"></i>{{ now.strftime('%d/%m/%Y') if now }}
             </div>

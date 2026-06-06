@@ -27,11 +27,14 @@ DB_PATH = os.environ.get('DB_PATH', os.path.join(os.path.dirname(__file__), 'gic
 
 
 def _ensure_db():
-    """Inicializa la BD automáticamente si no existe (útil en Railway)."""
+    """Inicializa la BD automáticamente si no existe y aplica migraciones."""
+    import subprocess, sys
     if not os.path.exists(DB_PATH):
-        import subprocess, sys
         init_script = os.path.join(os.path.dirname(__file__), 'init_db.py')
         subprocess.run([sys.executable, init_script], check=True)
+    migr_script = os.path.join(os.path.dirname(__file__), 'agregar_vigencias.py')
+    if os.path.exists(migr_script):
+        subprocess.run([sys.executable, migr_script], check=True)
 
 
 _ensure_db()
@@ -44,6 +47,21 @@ def get_db():
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     return conn
+
+
+def get_vigencia_id(db):
+    """Retorna vigencia_id de sesión o el de la vigencia activa."""
+    vid = session.get('vigencia_id')
+    if vid:
+        if db.execute('SELECT id FROM vigencia WHERE id=?', (vid,)).fetchone():
+            return vid
+    vig = db.execute(
+        'SELECT id FROM vigencia WHERE activa=1 ORDER BY año DESC LIMIT 1'
+    ).fetchone()
+    if vig:
+        session['vigencia_id'] = vig['id']
+        return vig['id']
+    return None
 
 
 # ─── HELPERS ─────────────────────────────────────────────────────────────────
@@ -68,10 +86,33 @@ app.jinja_env.globals.update(semaforo=semaforo, semaforo_color=semaforo_color)
 
 @app.context_processor
 def inject_globals():
-    return {
+    resultado = {
         'now': datetime.now(),
         'session_user': session.get('user'),
+        'vigencia_actual': None,
+        'todas_vigencias': [],
     }
+    if 'user' in session:
+        try:
+            db = get_db()
+            resultado['todas_vigencias'] = db.execute(
+                'SELECT * FROM vigencia ORDER BY año DESC'
+            ).fetchall()
+            vid = session.get('vigencia_id')
+            va = None
+            if vid:
+                va = db.execute('SELECT * FROM vigencia WHERE id=?', (vid,)).fetchone()
+            if not va:
+                va = db.execute(
+                    'SELECT * FROM vigencia WHERE activa=1 ORDER BY año DESC LIMIT 1'
+                ).fetchone()
+                if va:
+                    session['vigencia_id'] = va['id']
+            resultado['vigencia_actual'] = va
+            db.close()
+        except Exception:
+            pass
+    return resultado
 
 
 @app.errorhandler(404)
@@ -209,6 +250,11 @@ def login():
         db.execute('UPDATE usuario SET ultimo_acceso=CURRENT_TIMESTAMP WHERE id=?', (user['id'],))
         db.execute('INSERT INTO log_auditoria (usuario_id, username, accion, modulo, ip) VALUES (?,?,?,?,?)',
                    (user['id'], username, 'LOGIN', 'Auth', request.remote_addr or ''))
+        vig = db.execute(
+            'SELECT id FROM vigencia WHERE activa=1 ORDER BY año DESC LIMIT 1'
+        ).fetchone()
+        if vig:
+            session['vigencia_id'] = vig['id']
         db.commit()
         db.close()
 
@@ -229,6 +275,20 @@ def logout():
     session.clear()
     flash('Sesión cerrada correctamente.', 'info')
     return redirect(url_for('login'))
+
+
+@app.route('/cambiar-vigencia/<int:vid>', methods=['POST'])
+@login_required
+def cambiar_vigencia(vid):
+    db = get_db()
+    v = db.execute('SELECT * FROM vigencia WHERE id=?', (vid,)).fetchone()
+    db.close()
+    if v:
+        session['vigencia_id'] = vid
+        flash(f'Vigencia cambiada a: {v["nombre"]}', 'info')
+    else:
+        flash('Vigencia no encontrada.', 'danger')
+    return redirect(request.referrer or url_for('dashboard'))
 
 
 @app.route('/mi-perfil', methods=['GET', 'POST'])
@@ -558,6 +618,7 @@ def auditoria():
 @login_required
 def dashboard():
     db = get_db()
+    vid = get_vigencia_id(db)
     procesos = db.execute('''
         SELECT p.*, tp.nombre as tipo_nombre,
                COALESCE(scores.proc_score,0) as proc_score,
@@ -572,8 +633,9 @@ def dashboard():
         FROM proceso p
         LEFT JOIN tipo_proceso tp ON p.tipo_proceso_id = tp.id
         LEFT JOIN ponderacion_proceso scores ON p.id = scores.proceso_id
+            AND scores.vigencia_id=?
         ORDER BY tp.orden, p.codigo
-    ''').fetchall()
+    ''', (vid,)).fetchall()
     total = len(procesos)
     ponds = [p['ponderacion'] for p in procesos]
     avance_global = round((sum(ponds) / total * 100) if total else 0, 1)
@@ -713,6 +775,7 @@ def organigrama_eliminar(id):
 @login_required
 def procesos():
     db = get_db()
+    vid = get_vigencia_id(db)
     lista = db.execute('''
         SELECT p.*, tp.nombre as tipo_nombre, u.nombre as unidad_nombre,
                COALESCE(s.proc_score,0) as proc_score,
@@ -726,9 +789,9 @@ def procesos():
         FROM proceso p
         LEFT JOIN tipo_proceso tp ON p.tipo_proceso_id = tp.id
         LEFT JOIN unidad_organigrama u ON p.unidad_id = u.id
-        LEFT JOIN ponderacion_proceso s ON p.id = s.proceso_id
+        LEFT JOIN ponderacion_proceso s ON p.id = s.proceso_id AND s.vigencia_id=?
         ORDER BY tp.orden, p.codigo
-    ''').fetchall()
+    ''', (vid,)).fetchall()
     db.close()
     return render_template('procesos/list.html', procesos=lista)
 
@@ -740,13 +803,14 @@ def proceso_nuevo():
     tipos = db.execute('SELECT * FROM tipo_proceso ORDER BY orden').fetchall()
     unidades = db.execute('SELECT * FROM unidad_organigrama ORDER BY nombre').fetchall()
     if request.method == 'POST':
+        vid = get_vigencia_id(db)
         cur = db.execute(
             'INSERT INTO proceso (codigo, nombre, tipo_proceso_id, unidad_id, objetivo, alcance) VALUES (?,?,?,?,?,?)',
             (request.form['codigo'], request.form['nombre'],
              request.form['tipo_proceso_id'], request.form.get('unidad_id') or None,
              request.form.get('objetivo', ''), request.form.get('alcance', '')))
         pid = cur.lastrowid
-        db.execute('INSERT OR IGNORE INTO ponderacion_proceso (proceso_id) VALUES (?)', (pid,))
+        db.execute('INSERT OR IGNORE INTO ponderacion_proceso (proceso_id, vigencia_id) VALUES (?,?)', (pid, vid))
         db.commit()
         registrar_auditoria('CREAR', 'Procesos', request.form['nombre'])
         flash('Proceso creado exitosamente.', 'success')
@@ -795,6 +859,7 @@ def proceso_eliminar(id):
 @login_required
 def proceso_detalle(id):
     db = get_db()
+    vid = get_vigencia_id(db)
     proceso = db.execute('''
         SELECT p.*, tp.nombre as tipo_nombre, u.nombre as unidad_nombre,
                COALESCE(s.proc_score,0) as proc_score,
@@ -808,14 +873,24 @@ def proceso_detalle(id):
         FROM proceso p
         LEFT JOIN tipo_proceso tp ON p.tipo_proceso_id = tp.id
         LEFT JOIN unidad_organigrama u ON p.unidad_id = u.id
-        LEFT JOIN ponderacion_proceso s ON p.id = s.proceso_id
+        LEFT JOIN ponderacion_proceso s ON p.id = s.proceso_id AND s.vigencia_id=?
         WHERE p.id=?
-    ''', (id,)).fetchone()
-    procedimientos = db.execute('SELECT * FROM procedimiento WHERE proceso_id=? ORDER BY codigo', (id,)).fetchall()
-    indicadores = db.execute('SELECT * FROM indicador WHERE proceso_id=? ORDER BY codigo', (id,)).fetchall()
-    caracterizaciones = db.execute('SELECT * FROM caracterizacion WHERE proceso_id=?', (id,)).fetchall()
-    normogramas = db.execute('SELECT * FROM normograma WHERE proceso_id=? ORDER BY fecha_expedicion DESC', (id,)).fetchall()
-    riesgos = db.execute('SELECT * FROM riesgo WHERE proceso_id=? ORDER BY probabilidad DESC', (id,)).fetchall()
+    ''', (vid, id)).fetchone()
+    procedimientos = db.execute(
+        'SELECT * FROM procedimiento WHERE proceso_id=? AND vigencia_id=? ORDER BY codigo', (id, vid)
+    ).fetchall()
+    indicadores = db.execute(
+        'SELECT * FROM indicador WHERE proceso_id=? AND vigencia_id=? ORDER BY codigo', (id, vid)
+    ).fetchall()
+    caracterizaciones = db.execute(
+        'SELECT * FROM caracterizacion WHERE proceso_id=? AND vigencia_id=?', (id, vid)
+    ).fetchall()
+    normogramas = db.execute(
+        'SELECT * FROM normograma WHERE proceso_id=? AND vigencia_id=? ORDER BY fecha_expedicion DESC', (id, vid)
+    ).fetchall()
+    riesgos = db.execute(
+        'SELECT * FROM riesgo WHERE proceso_id=? AND vigencia_id=? ORDER BY probabilidad DESC', (id, vid)
+    ).fetchall()
     db.close()
     return render_template('procesos/detalle.html',
                            proceso=proceso, procedimientos=procedimientos,
@@ -827,8 +902,11 @@ def proceso_detalle(id):
 @puede_editar
 def proceso_ponderacion(id):
     db = get_db()
+    vid = get_vigencia_id(db)
     proceso = db.execute('SELECT * FROM proceso WHERE id=?', (id,)).fetchone()
-    pond = db.execute('SELECT * FROM ponderacion_proceso WHERE proceso_id=?', (id,)).fetchone()
+    pond = db.execute(
+        'SELECT * FROM ponderacion_proceso WHERE proceso_id=? AND vigencia_id=?', (id, vid)
+    ).fetchone()
     if request.method == 'POST':
         ps = float(request.form.get('proc_score', 0))
         is_ = float(request.form.get('ind_score', 0))
@@ -836,13 +914,13 @@ def proceso_ponderacion(id):
         ns = float(request.form.get('norm_score', 0))
         rs = float(request.form.get('risk_score', 0))
         db.execute('''
-            INSERT INTO ponderacion_proceso (proceso_id, proc_score, ind_score, car_score, norm_score, risk_score)
-            VALUES (?,?,?,?,?,?)
-            ON CONFLICT(proceso_id) DO UPDATE SET
+            INSERT INTO ponderacion_proceso (proceso_id, vigencia_id, proc_score, ind_score, car_score, norm_score, risk_score)
+            VALUES (?,?,?,?,?,?,?)
+            ON CONFLICT(proceso_id, vigencia_id) DO UPDATE SET
                 proc_score=excluded.proc_score, ind_score=excluded.ind_score,
                 car_score=excluded.car_score, norm_score=excluded.norm_score,
                 risk_score=excluded.risk_score, fecha_actualizacion=CURRENT_TIMESTAMP
-        ''', (id, ps, is_, cs, ns, rs))
+        ''', (id, vid, ps, is_, cs, ns, rs))
         db.commit()
         registrar_auditoria('EDITAR', 'Ponderación', f'Proceso ID:{id}')
         flash('Ponderación actualizada.', 'success')
@@ -858,14 +936,16 @@ def proceso_ponderacion(id):
 @login_required
 def procedimientos():
     db = get_db()
+    vid = get_vigencia_id(db)
     filtro_proceso = request.args.get('proceso_id', '')
     query = '''
         SELECT pr.*, p.nombre as proceso_nombre, p.codigo as proceso_codigo
         FROM procedimiento pr JOIN proceso p ON pr.proceso_id = p.id
+        WHERE pr.vigencia_id=?
     '''
-    params = []
+    params = [vid]
     if filtro_proceso:
-        query += ' WHERE pr.proceso_id=?'
+        query += ' AND pr.proceso_id=?'
         params.append(filtro_proceso)
     query += ' ORDER BY p.codigo, pr.codigo'
     lista = db.execute(query, params).fetchall()
@@ -881,12 +961,13 @@ def procedimiento_nuevo():
     db = get_db()
     procesos = db.execute('SELECT id, nombre, codigo FROM proceso ORDER BY nombre').fetchall()
     if request.method == 'POST':
+        vid = get_vigencia_id(db)
         db.execute(
-            'INSERT INTO procedimiento (proceso_id, codigo, nombre, estado, publicado_onedrive, descripcion, responsable, version) VALUES (?,?,?,?,?,?,?,?)',
+            'INSERT INTO procedimiento (proceso_id, codigo, nombre, estado, publicado_onedrive, descripcion, responsable, version, vigencia_id) VALUES (?,?,?,?,?,?,?,?,?)',
             (request.form['proceso_id'], request.form['codigo'], request.form['nombre'],
              request.form['estado'], request.form.get('publicado_onedrive', 'NO'),
              request.form.get('descripcion', ''), request.form.get('responsable', ''),
-             request.form.get('version', '1.0')))
+             request.form.get('version', '1.0'), vid))
         db.commit()
         registrar_auditoria('CREAR', 'Procedimientos', request.form['nombre'])
         flash('Procedimiento creado exitosamente.', 'success')
@@ -940,14 +1021,16 @@ def procedimiento_eliminar(id):
 @login_required
 def indicadores():
     db = get_db()
+    vid = get_vigencia_id(db)
     filtro_proceso = request.args.get('proceso_id', '')
     query = '''
         SELECT i.*, p.nombre as proceso_nombre, p.codigo as proceso_codigo
         FROM indicador i JOIN proceso p ON i.proceso_id = p.id
+        WHERE i.vigencia_id=?
     '''
-    params = []
+    params = [vid]
     if filtro_proceso:
-        query += ' WHERE i.proceso_id=?'
+        query += ' AND i.proceso_id=?'
         params.append(filtro_proceso)
     query += ' ORDER BY p.codigo, i.codigo'
     lista = db.execute(query, params).fetchall()
@@ -963,13 +1046,14 @@ def indicador_nuevo():
     db = get_db()
     procesos = db.execute('SELECT id, nombre, codigo FROM proceso ORDER BY nombre').fetchall()
     if request.method == 'POST':
+        vid = get_vigencia_id(db)
         db.execute(
-            'INSERT INTO indicador (proceso_id, codigo, nombre, estado, publicado_onedrive, formula, meta, unidad_medida, frecuencia, responsable) VALUES (?,?,?,?,?,?,?,?,?,?)',
+            'INSERT INTO indicador (proceso_id, codigo, nombre, estado, publicado_onedrive, formula, meta, unidad_medida, frecuencia, responsable, vigencia_id) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
             (request.form['proceso_id'], request.form['codigo'], request.form['nombre'],
              request.form['estado'], request.form.get('publicado_onedrive', 'NO'),
              request.form.get('formula', ''), request.form.get('meta', ''),
              request.form.get('unidad_medida', ''), request.form.get('frecuencia', ''),
-             request.form.get('responsable', '')))
+             request.form.get('responsable', ''), vid))
         db.commit()
         registrar_auditoria('CREAR', 'Indicadores', request.form['nombre'])
         flash('Indicador creado exitosamente.', 'success')
@@ -1024,14 +1108,16 @@ def indicador_eliminar(id):
 @login_required
 def caracterizacion():
     db = get_db()
+    vid = get_vigencia_id(db)
     filtro_proceso = request.args.get('proceso_id', '')
     query = '''
         SELECT c.*, p.nombre as proceso_nombre, p.codigo as proceso_codigo
         FROM caracterizacion c JOIN proceso p ON c.proceso_id = p.id
+        WHERE c.vigencia_id=?
     '''
-    params = []
+    params = [vid]
     if filtro_proceso:
-        query += ' WHERE c.proceso_id=?'
+        query += ' AND c.proceso_id=?'
         params.append(filtro_proceso)
     query += ' ORDER BY p.codigo'
     lista = db.execute(query, params).fetchall()
@@ -1047,12 +1133,13 @@ def caracterizacion_nuevo():
     db = get_db()
     procesos = db.execute('SELECT id, nombre, codigo FROM proceso ORDER BY nombre').fetchall()
     if request.method == 'POST':
+        vid = get_vigencia_id(db)
         db.execute('''
             INSERT INTO caracterizacion
             (proceso_id, version, objetivo, alcance, proveedor, entradas, actividades,
              salidas, cliente, recursos_humanos, recursos_tecnologicos, recursos_fisicos,
-             normatividad, indicadores_ref, riesgos_ref, estado)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+             normatividad, indicadores_ref, riesgos_ref, estado, vigencia_id)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
         ''', (request.form['proceso_id'], request.form.get('version', '1.0'),
               request.form.get('objetivo', ''), request.form.get('alcance', ''),
               request.form.get('proveedor', ''), request.form.get('entradas', ''),
@@ -1060,7 +1147,7 @@ def caracterizacion_nuevo():
               request.form.get('cliente', ''), request.form.get('recursos_humanos', ''),
               request.form.get('recursos_tecnologicos', ''), request.form.get('recursos_fisicos', ''),
               request.form.get('normatividad', ''), request.form.get('indicadores_ref', ''),
-              request.form.get('riesgos_ref', ''), request.form.get('estado', 'BORRADOR')))
+              request.form.get('riesgos_ref', ''), request.form.get('estado', 'BORRADOR'), vid))
         db.commit()
         registrar_auditoria('CREAR', 'Caracterización', f'Proceso ID:{request.form["proceso_id"]}')
         flash('Caracterización creada exitosamente.', 'success')
@@ -1121,14 +1208,16 @@ def caracterizacion_eliminar(id):
 @login_required
 def normograma():
     db = get_db()
+    vid = get_vigencia_id(db)
     filtro_proceso = request.args.get('proceso_id', '')
     query = '''
         SELECT n.*, p.nombre as proceso_nombre
         FROM normograma n JOIN proceso p ON n.proceso_id = p.id
+        WHERE n.vigencia_id=?
     '''
-    params = []
+    params = [vid]
     if filtro_proceso:
-        query += ' WHERE n.proceso_id=?'
+        query += ' AND n.proceso_id=?'
         params.append(filtro_proceso)
     query += ' ORDER BY n.fecha_expedicion DESC'
     lista = db.execute(query, params).fetchall()
@@ -1144,16 +1233,17 @@ def normograma_nuevo():
     db = get_db()
     procesos = db.execute('SELECT id, nombre, codigo FROM proceso ORDER BY nombre').fetchall()
     if request.method == 'POST':
+        vid = get_vigencia_id(db)
         db.execute('''
             INSERT INTO normograma
             (proceso_id, tipo_norma, numero, año, entidad_expide, titulo, descripcion,
-             fecha_expedicion, vigente, enlace)
-            VALUES (?,?,?,?,?,?,?,?,?,?)
+             fecha_expedicion, vigente, enlace, vigencia_id)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?)
         ''', (request.form['proceso_id'], request.form['tipo_norma'],
               request.form.get('numero', ''), request.form.get('año', ''),
               request.form.get('entidad_expide', ''), request.form.get('titulo', ''),
               request.form.get('descripcion', ''), request.form.get('fecha_expedicion') or None,
-              1 if request.form.get('vigente') else 0, request.form.get('enlace', '')))
+              1 if request.form.get('vigente') else 0, request.form.get('enlace', ''), vid))
         db.commit()
         registrar_auditoria('CREAR', 'Normograma', request.form.get('titulo', ''))
         flash('Norma registrada exitosamente.', 'success')
@@ -1224,14 +1314,16 @@ NIVELES = {
 @login_required
 def riesgos():
     db = get_db()
+    vid = get_vigencia_id(db)
     filtro_proceso = request.args.get('proceso_id', '')
     query = '''
         SELECT r.*, p.nombre as proceso_nombre
         FROM riesgo r JOIN proceso p ON r.proceso_id = p.id
+        WHERE r.vigencia_id=?
     '''
-    params = []
+    params = [vid]
     if filtro_proceso:
-        query += ' WHERE r.proceso_id=?'
+        query += ' AND r.proceso_id=?'
         params.append(filtro_proceso)
     query += ' ORDER BY (r.probabilidad * r.impacto) DESC'
     lista = db.execute(query, params).fetchall()
@@ -1250,12 +1342,13 @@ def riesgo_nuevo():
         prob = int(request.form.get('probabilidad', 1))
         imp = int(request.form.get('impacto', 1))
         nivel = NIVELES.get((prob, imp), ('Bajo', '#28a745'))[0]
+        vid = get_vigencia_id(db)
         db.execute('''
             INSERT INTO riesgo
             (proceso_id, codigo, nombre, descripcion, tipo_riesgo, causa,
              consecuencia, probabilidad, impacto, nivel_riesgo, control_existente,
-             accion_mitigacion, responsable, fecha_identificacion)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+             accion_mitigacion, responsable, fecha_identificacion, vigencia_id)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
         ''', (request.form['proceso_id'], request.form.get('codigo', ''),
               request.form['nombre'], request.form.get('descripcion', ''),
               request.form.get('tipo_riesgo', ''), request.form.get('causa', ''),
@@ -1263,7 +1356,7 @@ def riesgo_nuevo():
               request.form.get('control_existente', ''),
               request.form.get('accion_mitigacion', ''),
               request.form.get('responsable', ''),
-              request.form.get('fecha_identificacion') or None))
+              request.form.get('fecha_identificacion') or None, vid))
         db.commit()
         registrar_auditoria('CREAR', 'Riesgos', request.form['nombre'])
         flash('Riesgo registrado exitosamente.', 'success')
@@ -1330,6 +1423,7 @@ def buscar():
     if not q or len(q) < 2:
         return render_template('buscar.html', resultados={}, q=q, total=0)
     db = get_db()
+    vid = get_vigencia_id(db)
     like = f'%{q}%'
     procs = db.execute(
         'SELECT id, codigo, nombre FROM proceso WHERE nombre LIKE ? OR codigo LIKE ? LIMIT 10',
@@ -1337,23 +1431,23 @@ def buscar():
     procs_det = db.execute(
         '''SELECT pr.id, pr.codigo, pr.nombre, p.nombre as proceso_nombre
            FROM procedimiento pr JOIN proceso p ON pr.proceso_id = p.id
-           WHERE pr.nombre LIKE ? OR pr.codigo LIKE ? LIMIT 10''',
-        (like, like)).fetchall()
+           WHERE pr.vigencia_id=? AND (pr.nombre LIKE ? OR pr.codigo LIKE ?) LIMIT 10''',
+        (vid, like, like)).fetchall()
     normas = db.execute(
         '''SELECT n.id, n.titulo, n.tipo_norma, n.numero, p.nombre as proceso_nombre
            FROM normograma n JOIN proceso p ON n.proceso_id = p.id
-           WHERE n.titulo LIKE ? OR n.numero LIKE ? OR n.descripcion LIKE ? LIMIT 10''',
-        (like, like, like)).fetchall()
+           WHERE n.vigencia_id=? AND (n.titulo LIKE ? OR n.numero LIKE ? OR n.descripcion LIKE ?) LIMIT 10''',
+        (vid, like, like, like)).fetchall()
     riesgos_r = db.execute(
         '''SELECT r.id, r.codigo, r.nombre, r.nivel_riesgo, p.nombre as proceso_nombre
            FROM riesgo r JOIN proceso p ON r.proceso_id = p.id
-           WHERE r.nombre LIKE ? OR r.descripcion LIKE ? LIMIT 10''',
-        (like, like)).fetchall()
+           WHERE r.vigencia_id=? AND (r.nombre LIKE ? OR r.descripcion LIKE ?) LIMIT 10''',
+        (vid, like, like)).fetchall()
     indicad = db.execute(
         '''SELECT i.id, i.codigo, i.nombre, p.nombre as proceso_nombre
            FROM indicador i JOIN proceso p ON i.proceso_id = p.id
-           WHERE i.nombre LIKE ? OR i.codigo LIKE ? LIMIT 10''',
-        (like, like)).fetchall()
+           WHERE i.vigencia_id=? AND (i.nombre LIKE ? OR i.codigo LIKE ?) LIMIT 10''',
+        (vid, like, like)).fetchall()
     db.close()
     resultados = {
         'procesos': procs,
@@ -1379,6 +1473,7 @@ def _excel_header_style():
 @login_required
 def exportar_dashboard():
     db = get_db()
+    vid = get_vigencia_id(db)
     rows = db.execute('''
         SELECT p.codigo, p.nombre, tp.nombre as tipo,
                COALESCE(s.proc_score,0)*100 as proc,
@@ -1391,9 +1486,9 @@ def exportar_dashboard():
                          COALESCE(s.risk_score,0))/5.0,0)*100 as ponderacion
         FROM proceso p
         LEFT JOIN tipo_proceso tp ON p.tipo_proceso_id = tp.id
-        LEFT JOIN ponderacion_proceso s ON p.id = s.proceso_id
+        LEFT JOIN ponderacion_proceso s ON p.id = s.proceso_id AND s.vigencia_id=?
         ORDER BY tp.orden, p.codigo
-    ''').fetchall()
+    ''', (vid,)).fetchall()
     db.close()
 
     if HAS_OPENPYXL:
@@ -1451,14 +1546,16 @@ def exportar_dashboard():
 @login_required
 def exportar_riesgos():
     db = get_db()
+    vid = get_vigencia_id(db)
     rows = db.execute('''
         SELECT r.codigo, r.nombre, r.descripcion, r.tipo_riesgo, r.causa,
                r.consecuencia, r.probabilidad, r.impacto, r.nivel_riesgo,
                r.control_existente, r.accion_mitigacion, r.responsable,
                r.fecha_identificacion, p.nombre as proceso_nombre
         FROM riesgo r JOIN proceso p ON r.proceso_id = p.id
+        WHERE r.vigencia_id=?
         ORDER BY (r.probabilidad * r.impacto) DESC
-    ''').fetchall()
+    ''', (vid,)).fetchall()
     db.close()
 
     if HAS_OPENPYXL:
@@ -1563,17 +1660,226 @@ def exportar_auditoria():
 @login_required
 def api_ponderacion_data():
     db = get_db()
+    vid = get_vigencia_id(db)
     data = db.execute('''
         SELECT p.nombre,
                COALESCE((COALESCE(s.proc_score,0)+COALESCE(s.ind_score,0)+
                          COALESCE(s.car_score,0)+COALESCE(s.norm_score,0)+
                          COALESCE(s.risk_score,0))/5.0,0) as ponderacion
         FROM proceso p
-        LEFT JOIN ponderacion_proceso s ON p.id = s.proceso_id
+        LEFT JOIN ponderacion_proceso s ON p.id = s.proceso_id AND s.vigencia_id=?
         ORDER BY ponderacion DESC
-    ''').fetchall()
+    ''', (vid,)).fetchall()
     db.close()
     return jsonify([{'nombre': r['nombre'], 'valor': round(r['ponderacion'] * 100, 1)} for r in data])
+
+
+# ─── VIGENCIAS ───────────────────────────────────────────────────────────────
+
+@app.route('/admin/vigencias')
+@solo_admin
+def vigencias_list():
+    db = get_db()
+    vigencias = db.execute('''
+        SELECT v.*,
+               (SELECT COUNT(*) FROM ponderacion_proceso WHERE vigencia_id=v.id) as num_procesos,
+               (SELECT COUNT(*) FROM procedimiento WHERE vigencia_id=v.id) as num_procedimientos,
+               (SELECT COUNT(*) FROM indicador WHERE vigencia_id=v.id) as num_indicadores,
+               (SELECT COUNT(*) FROM riesgo WHERE vigencia_id=v.id) as num_riesgos
+        FROM vigencia v
+        ORDER BY v.año DESC
+    ''').fetchall()
+    db.close()
+    return render_template('vigencias/list.html', vigencias=vigencias)
+
+
+@app.route('/admin/vigencias/nueva', methods=['GET', 'POST'])
+@solo_admin
+def vigencia_nueva():
+    if request.method == 'POST':
+        try:
+            año = int(request.form['año'])
+        except (ValueError, KeyError):
+            flash('El año debe ser un número válido.', 'danger')
+            return render_template('vigencias/form.html', vigencia=None)
+        nombre = request.form.get('nombre', '').strip() or f'GICA {año}'
+        descripcion = request.form.get('descripcion', '')
+        fecha_inicio = request.form.get('fecha_inicio') or None
+        db = get_db()
+        if db.execute('SELECT id FROM vigencia WHERE año=?', (año,)).fetchone():
+            flash(f'Ya existe una vigencia para el año {año}.', 'danger')
+            db.close()
+            return render_template('vigencias/form.html', vigencia=None)
+        db.execute('''
+            INSERT INTO vigencia (año, nombre, descripcion, activa, fecha_inicio)
+            VALUES (?,?,?,0,?)
+        ''', (año, nombre, descripcion, fecha_inicio))
+        db.commit()
+        registrar_auditoria('CREAR', 'Vigencias', f'Vigencia {nombre}')
+        flash(f'Vigencia "{nombre}" creada exitosamente.', 'success')
+        db.close()
+        return redirect(url_for('vigencias_list'))
+    return render_template('vigencias/form.html', vigencia=None)
+
+
+@app.route('/admin/vigencias/<int:id>/editar', methods=['GET', 'POST'])
+@solo_admin
+def vigencia_editar(id):
+    db = get_db()
+    v = db.execute('SELECT * FROM vigencia WHERE id=?', (id,)).fetchone()
+    if not v:
+        flash('Vigencia no encontrada.', 'danger')
+        db.close()
+        return redirect(url_for('vigencias_list'))
+    if request.method == 'POST':
+        nombre = request.form.get('nombre', '').strip() or v['nombre']
+        descripcion = request.form.get('descripcion', '')
+        fecha_inicio = request.form.get('fecha_inicio') or None
+        fecha_cierre = request.form.get('fecha_cierre') or None
+        db.execute('''
+            UPDATE vigencia SET nombre=?, descripcion=?, fecha_inicio=?, fecha_cierre=?
+            WHERE id=?
+        ''', (nombre, descripcion, fecha_inicio, fecha_cierre, id))
+        db.commit()
+        registrar_auditoria('EDITAR', 'Vigencias', f'Vigencia ID:{id}')
+        flash('Vigencia actualizada correctamente.', 'success')
+        db.close()
+        return redirect(url_for('vigencias_list'))
+    db.close()
+    return render_template('vigencias/form.html', vigencia=v)
+
+
+@app.route('/admin/vigencias/<int:id>/activar', methods=['POST'])
+@solo_admin
+def vigencia_activar(id):
+    db = get_db()
+    v = db.execute('SELECT nombre FROM vigencia WHERE id=?', (id,)).fetchone()
+    if v:
+        db.execute('UPDATE vigencia SET activa=0')
+        db.execute('UPDATE vigencia SET activa=1 WHERE id=?', (id,))
+        db.commit()
+        session['vigencia_id'] = id
+        registrar_auditoria('ACTIVAR', 'Vigencias', f'Vigencia {v["nombre"]} activada')
+        flash(f'Vigencia "{v["nombre"]}" activada. Todos los usuarios verán esta vigencia al iniciar sesión.', 'success')
+    db.close()
+    return redirect(url_for('vigencias_list'))
+
+
+@app.route('/admin/vigencias/<int:id>/copiar', methods=['POST'])
+@solo_admin
+def vigencia_copiar(id):
+    """Crea una nueva vigencia copiando la estructura de procesos (con ponderación en cero)."""
+    try:
+        año_nuevo = int(request.form.get('año_nuevo', 0))
+    except ValueError:
+        flash('Año de destino inválido.', 'danger')
+        return redirect(url_for('vigencias_list'))
+    if not año_nuevo:
+        flash('Debe especificar el año de destino.', 'danger')
+        return redirect(url_for('vigencias_list'))
+    db = get_db()
+    if db.execute('SELECT id FROM vigencia WHERE año=?', (año_nuevo,)).fetchone():
+        flash(f'Ya existe una vigencia para el año {año_nuevo}.', 'danger')
+        db.close()
+        return redirect(url_for('vigencias_list'))
+    v_origen = db.execute('SELECT * FROM vigencia WHERE id=?', (id,)).fetchone()
+    if not v_origen:
+        flash('Vigencia origen no encontrada.', 'danger')
+        db.close()
+        return redirect(url_for('vigencias_list'))
+    cur = db.execute('''
+        INSERT INTO vigencia (año, nombre, descripcion, activa, fecha_inicio)
+        VALUES (?,?,?,0,?)
+    ''', (año_nuevo, f'GICA {año_nuevo}',
+          f'Copiada de {v_origen["nombre"]}', f'{año_nuevo}-01-01'))
+    new_vid = cur.lastrowid
+    db.execute('''
+        INSERT INTO ponderacion_proceso (proceso_id, vigencia_id, proc_score, ind_score, car_score, norm_score, risk_score)
+        SELECT proceso_id, ?, 0, 0, 0, 0, 0
+        FROM ponderacion_proceso WHERE vigencia_id=?
+        ON CONFLICT(proceso_id, vigencia_id) DO NOTHING
+    ''', (new_vid, id))
+    db.commit()
+    registrar_auditoria('COPIAR', 'Vigencias',
+                        f'Vigencia {v_origen["nombre"]} copiada a {año_nuevo}')
+    flash(f'Vigencia GICA {año_nuevo} creada con la estructura de {v_origen["nombre"]}.', 'success')
+    db.close()
+    return redirect(url_for('vigencias_list'))
+
+
+# ─── COMPARATIVO ─────────────────────────────────────────────────────────────
+
+@app.route('/comparativo')
+@login_required
+def comparativo():
+    db = get_db()
+    vigencias = db.execute('SELECT * FROM vigencia ORDER BY año DESC').fetchall()
+    vid1 = request.args.get('v1', type=int)
+    vid2 = request.args.get('v2', type=int)
+    datos = []
+    if vid1 and vid2 and vid1 != vid2:
+        procesos_list = db.execute(
+            'SELECT id, codigo, nombre FROM proceso ORDER BY codigo'
+        ).fetchall()
+        for p in procesos_list:
+            p1 = db.execute(
+                'SELECT * FROM ponderacion_proceso WHERE proceso_id=? AND vigencia_id=?',
+                (p['id'], vid1)
+            ).fetchone()
+            p2 = db.execute(
+                'SELECT * FROM ponderacion_proceso WHERE proceso_id=? AND vigencia_id=?',
+                (p['id'], vid2)
+            ).fetchone()
+            if p1 or p2:
+                pond1 = ((p1['proc_score']+p1['ind_score']+p1['car_score']+
+                          p1['norm_score']+p1['risk_score'])/5) if p1 else 0
+                pond2 = ((p2['proc_score']+p2['ind_score']+p2['car_score']+
+                          p2['norm_score']+p2['risk_score'])/5) if p2 else 0
+                datos.append({
+                    'proceso': dict(p),
+                    'v1': dict(p1) if p1 else None,
+                    'v2': dict(p2) if p2 else None,
+                    'pond1': round(pond1 * 100, 1),
+                    'pond2': round(pond2 * 100, 1),
+                    'delta': round((pond2 - pond1) * 100, 1),
+                })
+    v1_obj = db.execute('SELECT * FROM vigencia WHERE id=?', (vid1,)).fetchone() if vid1 else None
+    v2_obj = db.execute('SELECT * FROM vigencia WHERE id=?', (vid2,)).fetchone() if vid2 else None
+    db.close()
+    return render_template('comparativo.html', vigencias=vigencias, datos=datos,
+                           v1=v1_obj, v2=v2_obj, vid1=vid1, vid2=vid2)
+
+
+@app.route('/api/evolucion-data')
+@login_required
+def api_evolucion_data():
+    db = get_db()
+    proceso_id = request.args.get('proceso_id', type=int)
+    if proceso_id:
+        rows = db.execute('''
+            SELECT v.año, v.nombre,
+                   COALESCE((pp.proc_score+pp.ind_score+pp.car_score+
+                              pp.norm_score+pp.risk_score)/5.0, 0)*100 as ponderacion
+            FROM vigencia v
+            LEFT JOIN ponderacion_proceso pp ON pp.vigencia_id=v.id AND pp.proceso_id=?
+            ORDER BY v.año
+        ''', (proceso_id,)).fetchall()
+    else:
+        rows = db.execute('''
+            SELECT v.año, v.nombre,
+                   COALESCE(AVG((pp.proc_score+pp.ind_score+pp.car_score+
+                                 pp.norm_score+pp.risk_score)/5.0), 0)*100 as ponderacion
+            FROM vigencia v
+            LEFT JOIN ponderacion_proceso pp ON pp.vigencia_id=v.id
+            GROUP BY v.id, v.año, v.nombre
+            ORDER BY v.año
+        ''').fetchall()
+    db.close()
+    return jsonify([{
+        'año': r['año'],
+        'nombre': r['nombre'],
+        'ponderacion': round(r['ponderacion'] or 0, 1)
+    } for r in rows])
 
 
 if __name__ == '__main__':

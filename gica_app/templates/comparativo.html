@@ -1,0 +1,219 @@
+{% extends 'base.html' %}
+{% block title %}Comparativo de Vigencias — GICA{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <h2 class="fw-bold mb-0"><i class="bi bi-bar-chart-steps me-2"></i>Comparativo de Vigencias</h2>
+    <small class="text-muted">Análisis comparativo entre dos períodos administrativos</small>
+  </div>
+</div>
+
+<!-- Selector de vigencias -->
+<div class="card shadow-sm mb-4">
+  <div class="card-body">
+    <form method="get" class="row g-3 align-items-end">
+      <div class="col-md-4">
+        <label class="form-label fw-semibold">Vigencia base (antes)</label>
+        <select name="v1" class="form-select">
+          <option value="">— Seleccione —</option>
+          {% for v in vigencias %}
+          <option value="{{ v.id }}" {% if vid1 == v.id %}selected{% endif %}>{{ v.nombre }} ({{ v.año }})</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-4">
+        <label class="form-label fw-semibold">Vigencia a comparar (después)</label>
+        <select name="v2" class="form-select">
+          <option value="">— Seleccione —</option>
+          {% for v in vigencias %}
+          <option value="{{ v.id }}" {% if vid2 == v.id %}selected{% endif %}>{{ v.nombre }} ({{ v.año }})</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-4">
+        <button type="submit" class="btn btn-primary w-100">
+          <i class="bi bi-arrow-repeat me-1"></i>Comparar
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% if v1 and v2 and datos %}
+<!-- Resumen estadístico -->
+{% set total = datos|length %}
+{% set mejoraron = datos|selectattr('delta', 'gt', 0)|list|length %}
+{% set empeoraron = datos|selectattr('delta', 'lt', 0)|list|length %}
+{% set sin_cambio = total - mejoraron - empeoraron %}
+{% set avg1 = (datos|sum(attribute='pond1') / total)|round(1) if total else 0 %}
+{% set avg2 = (datos|sum(attribute='pond2') / total)|round(1) if total else 0 %}
+
+<div class="row g-3 mb-4">
+  <div class="col-md-3">
+    <div class="card text-center border-0 shadow-sm">
+      <div class="card-body">
+        <div class="fs-1 fw-bold text-primary">{{ avg2 }}%</div>
+        <div class="text-muted small">Promedio {{ v2.nombre }}</div>
+        <div class="small {% if avg2 > avg1 %}text-success{% elif avg2 < avg1 %}text-danger{% endif %}">
+          {% if avg2 > avg1 %}<i class="bi bi-arrow-up-circle-fill"></i> +{{ (avg2-avg1)|round(1) }}%
+          {% elif avg2 < avg1 %}<i class="bi bi-arrow-down-circle-fill"></i> {{ (avg2-avg1)|round(1) }}%
+          {% else %}<i class="bi bi-dash-circle"></i> Sin cambio{% endif %}
+          vs {{ v1.nombre }}
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card text-center border-0 shadow-sm bg-success bg-opacity-10">
+      <div class="card-body">
+        <div class="fs-1 fw-bold text-success">{{ mejoraron }}</div>
+        <div class="text-muted small">Procesos que mejoraron</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card text-center border-0 shadow-sm bg-danger bg-opacity-10">
+      <div class="card-body">
+        <div class="fs-1 fw-bold text-danger">{{ empeoraron }}</div>
+        <div class="text-muted small">Procesos que bajaron</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card text-center border-0 shadow-sm bg-secondary bg-opacity-10">
+      <div class="card-body">
+        <div class="fs-1 fw-bold text-secondary">{{ sin_cambio }}</div>
+        <div class="text-muted small">Sin cambio</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Gráfica de barras comparativa -->
+<div class="card shadow-sm mb-4">
+  <div class="card-header bg-white fw-semibold">
+    <i class="bi bi-bar-chart me-2"></i>Comparativo por Proceso
+  </div>
+  <div class="card-body">
+    <canvas id="chartComparativo" height="120"></canvas>
+  </div>
+</div>
+
+<!-- Tabla de datos -->
+<div class="card shadow-sm">
+  <div class="card-header bg-white fw-semibold d-flex justify-content-between">
+    <span><i class="bi bi-table me-2"></i>Detalle por Proceso</span>
+    <small class="text-muted">{{ v1.nombre }} → {{ v2.nombre }}</small>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0" id="tablaComparativo">
+      <thead class="table-dark">
+        <tr>
+          <th>Código</th>
+          <th>Proceso</th>
+          <th class="text-center">{{ v1.nombre }}</th>
+          <th class="text-center">{{ v2.nombre }}</th>
+          <th class="text-center">Variación</th>
+          <th class="text-center">Tendencia</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for d in datos %}
+        <tr>
+          <td><code>{{ d.proceso.codigo }}</code></td>
+          <td>{{ d.proceso.nombre }}</td>
+          <td class="text-center">
+            <span class="badge rounded-pill"
+                  style="background:{{ '#198754' if d.pond1 >= 90 else ('#ffc107' if d.pond1 >= 70 else '#dc3545') }}">
+              {{ d.pond1 }}%
+            </span>
+          </td>
+          <td class="text-center">
+            <span class="badge rounded-pill"
+                  style="background:{{ '#198754' if d.pond2 >= 90 else ('#ffc107' if d.pond2 >= 70 else '#dc3545') }}">
+              {{ d.pond2 }}%
+            </span>
+          </td>
+          <td class="text-center fw-semibold
+              {% if d.delta > 0 %}text-success
+              {% elif d.delta < 0 %}text-danger
+              {% endif %}">
+            {{ '+' if d.delta > 0 else '' }}{{ d.delta }}%
+          </td>
+          <td class="text-center fs-5">
+            {% if d.delta > 5 %}<span class="text-success"><i class="bi bi-arrow-up-circle-fill"></i></span>
+            {% elif d.delta > 0 %}<span class="text-success"><i class="bi bi-arrow-up-right-circle"></i></span>
+            {% elif d.delta < -5 %}<span class="text-danger"><i class="bi bi-arrow-down-circle-fill"></i></span>
+            {% elif d.delta < 0 %}<span class="text-danger"><i class="bi bi-arrow-down-right-circle"></i></span>
+            {% else %}<span class="text-secondary"><i class="bi bi-dash-circle"></i></span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% elif v1 and v2 and not datos %}
+<div class="alert alert-warning">
+  <i class="bi bi-exclamation-triangle me-2"></i>
+  No hay datos de ponderación registrados para ninguna de las dos vigencias seleccionadas.
+</div>
+{% elif not v1 or not v2 %}
+<div class="card shadow-sm">
+  <div class="card-body text-center py-5 text-muted">
+    <i class="bi bi-arrow-left-right fs-1 mb-3 d-block"></i>
+    <p class="mb-0">Seleccione dos vigencias para ver el análisis comparativo.</p>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if datos %}
+<script>
+const labels = {{ datos|map(attribute='proceso')|map(attribute='codigo')|list|tojson }};
+const data1  = {{ datos|map(attribute='pond1')|list|tojson }};
+const data2  = {{ datos|map(attribute='pond2')|list|tojson }};
+
+new Chart(document.getElementById('chartComparativo'), {
+  type: 'bar',
+  data: {
+    labels: labels,
+    datasets: [
+      {
+        label: '{{ v1.nombre }}',
+        data: data1,
+        backgroundColor: 'rgba(108,117,125,0.6)',
+        borderColor: 'rgba(108,117,125,1)',
+        borderWidth: 1,
+      },
+      {
+        label: '{{ v2.nombre }}',
+        data: data2,
+        backgroundColor: 'rgba(26,39,68,0.75)',
+        borderColor: 'rgba(26,39,68,1)',
+        borderWidth: 1,
+      }
+    ]
+  },
+  options: {
+    responsive: true,
+    plugins: {
+      legend: { position: 'top' },
+      tooltip: {
+        callbacks: {
+          label: ctx => `${ctx.dataset.label}: ${ctx.parsed.y}%`
+        }
+      }
+    },
+    scales: {
+      y: { min: 0, max: 100, ticks: { callback: v => v+'%' } }
+    }
+  }
+});
+</script>
+{% endif %}
+{% endblock %}

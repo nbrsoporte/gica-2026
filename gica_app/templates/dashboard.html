@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% block title %}Tablero GICA 2026{% endblock %}
+{% block title %}Tablero GICA {{ vigencia_actual.año if vigencia_actual else '' }}{% endblock %}
 
 {% block breadcrumb %}
 <li class="breadcrumb-item active"><i class="bi bi-grid-1x2-fill me-1"></i>Tablero GICA</li>
@@ -9,9 +9,20 @@
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
         <h4 class="mb-0 fw-bold">Tablero Gestión Institucional de la Calidad</h4>
-        <small class="text-muted">Avance GICA 2026 — Secretaría de Salud Departamental</small>
+        <small class="text-muted">
+            {% if vigencia_actual %}
+                <i class="bi bi-calendar3 me-1"></i>{{ vigencia_actual.nombre }} — Secretaría de Salud Departamental
+            {% else %}
+                Secretaría de Salud Departamental de Bolívar
+            {% endif %}
+        </small>
     </div>
-    <div>
+    <div class="d-flex gap-2">
+        {% if todas_vigencias|length > 1 %}
+        <a href="{{ url_for('comparativo') }}" class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-bar-chart-steps me-1"></i>Comparativo
+        </a>
+        {% endif %}
         <a href="{{ url_for('exportar_dashboard') }}" class="btn btn-sm btn-outline-success">
             <i class="bi bi-file-earmark-excel me-1"></i>Exportar Excel
         </a>
@@ -75,7 +86,7 @@
                 <i class="bi bi-award-fill fs-2 text-warning opacity-75"></i>
             </div>
             <div class="col">
-                <div class="small opacity-75 fw-semibold text-uppercase" style="letter-spacing:.5px;">Avance Global GICA 2026</div>
+                <div class="small opacity-75 fw-semibold text-uppercase" style="letter-spacing:.5px;">Avance Global {{ vigencia_actual.nombre if vigencia_actual else 'GICA' }}</div>
                 <div class="d-flex align-items-center gap-3 mt-1">
                     <div class="progress flex-grow-1" style="height:12px; border-radius:6px; background:rgba(255,255,255,.2); max-width:500px;">
                         <div class="progress-bar {% if sem_global == 'verde' %}bg-success{% elif sem_global == 'amarillo' %}bg-warning{% else %}bg-danger{% endif %}"
@@ -229,6 +240,21 @@
         </div>
     </div>
 </div>
+
+{% if todas_vigencias|length > 1 %}
+<!-- EVOLUCIÓN HISTÓRICA -->
+<div class="card mt-3">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+        <strong><i class="bi bi-graph-up me-2"></i>Evolución Histórica del Avance Global</strong>
+        <a href="{{ url_for('comparativo') }}" class="btn btn-sm btn-outline-primary">
+            <i class="bi bi-arrow-right me-1"></i>Ver Comparativo
+        </a>
+    </div>
+    <div class="card-body">
+        <canvas id="chartEvolucion" height="70"></canvas>
+    </div>
+</div>
+{% endif %}
 {% endblock %}
 
 {% block scripts %}
@@ -253,6 +279,48 @@ fetch('/api/ponderacion-data')
             }
         });
     });
+
+// Gráfico de evolución histórica
+{% if todas_vigencias|length > 1 %}
+fetch('/api/evolucion-data')
+    .then(r => r.json())
+    .then(data => {
+        if (data.length < 2) return;
+        new Chart(document.getElementById('chartEvolucion'), {
+            type: 'line',
+            data: {
+                labels: data.map(d => d.nombre),
+                datasets: [{
+                    label: 'Avance Global (%)',
+                    data: data.map(d => d.ponderacion),
+                    borderColor: '#1a2744',
+                    backgroundColor: 'rgba(26,39,68,0.08)',
+                    borderWidth: 2,
+                    pointRadius: 5,
+                    pointBackgroundColor: data.map(d =>
+                        d.ponderacion >= 90 ? '#198754' : d.ponderacion >= 70 ? '#ffc107' : '#dc3545'
+                    ),
+                    tension: 0.3,
+                    fill: true,
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: { callbacks: { label: ctx => `${ctx.parsed.y}%` } }
+                },
+                scales: {
+                    y: {
+                        min: 0, max: 100,
+                        ticks: { callback: v => v + '%' },
+                        grid: { color: 'rgba(0,0,0,.05)' }
+                    }
+                }
+            }
+        });
+    });
+{% endif %}
 
 // Gráfico de dona semáforo
 new Chart(document.getElementById('chartSemaforo'), {
