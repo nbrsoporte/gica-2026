@@ -1,0 +1,154 @@
+{% extends 'base.html' %}
+{% block title %}Buscar en GICA{% endblock %}
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{{ url_for('dashboard') }}">Inicio</a></li>
+<li class="breadcrumb-item active">Búsqueda</li>
+{% endblock %}
+{% block content %}
+<div class="d-flex align-items-center gap-3 mb-4">
+    <h4 class="mb-0 fw-bold"><i class="bi bi-search me-2"></i>Búsqueda global</h4>
+    {% if q %}
+    <span class="badge bg-primary">{{ total }} resultado{{ 's' if total != 1 }}</span>
+    {% endif %}
+</div>
+
+<!-- Formulario de búsqueda prominente -->
+<div class="card mb-4">
+    <div class="card-body py-3">
+        <form method="get" class="d-flex gap-2">
+            <input type="text" name="q" class="form-control"
+                   placeholder="Buscar procesos, procedimientos, normas, riesgos, indicadores..."
+                   value="{{ q }}" autofocus>
+            <button class="btn btn-primary px-4" type="submit">
+                <i class="bi bi-search me-1"></i>Buscar
+            </button>
+        </form>
+    </div>
+</div>
+
+{% if q and q|length < 2 %}
+<div class="alert alert-warning">Ingrese al menos 2 caracteres para buscar.</div>
+{% elif q and total == 0 %}
+<div class="text-center py-5">
+    <i class="bi bi-search fs-1 text-muted d-block mb-3"></i>
+    <h5 class="text-muted">Sin resultados para "<strong>{{ q }}</strong>"</h5>
+    <p class="text-muted small">Intente con otro término o verifique la ortografía.</p>
+</div>
+{% elif q %}
+
+<!-- PROCESOS -->
+{% if resultados.procesos %}
+<div class="card mb-3">
+    <div class="card-header bg-white d-flex align-items-center gap-2">
+        <i class="bi bi-gear-wide-connected text-primary"></i>
+        <strong>Procesos</strong>
+        <span class="badge bg-primary ms-1">{{ resultados.procesos|length }}</span>
+    </div>
+    <div class="list-group list-group-flush">
+        {% for p in resultados.procesos %}
+        <a href="{{ url_for('proceso_detalle', id=p['id']) }}"
+           class="list-group-item list-group-item-action d-flex align-items-center gap-3 py-2">
+            <span class="badge bg-light text-dark border font-monospace">{{ p['codigo'] }}</span>
+            <span class="small fw-medium">{{ p['nombre'] }}</span>
+            <i class="bi bi-arrow-right ms-auto text-muted small"></i>
+        </a>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+<!-- PROCEDIMIENTOS -->
+{% if resultados.procedimientos %}
+<div class="card mb-3">
+    <div class="card-header bg-white d-flex align-items-center gap-2">
+        <i class="bi bi-file-earmark-text text-secondary"></i>
+        <strong>Procedimientos</strong>
+        <span class="badge bg-secondary ms-1">{{ resultados.procedimientos|length }}</span>
+    </div>
+    <div class="list-group list-group-flush">
+        {% for pr in resultados.procedimientos %}
+        <a href="{{ url_for('procedimiento_editar', id=pr['id']) }}"
+           class="list-group-item list-group-item-action py-2">
+            <div class="d-flex align-items-center gap-2">
+                <span class="badge bg-light text-dark border font-monospace small">{{ pr['codigo'] }}</span>
+                <span class="small fw-medium">{{ pr['nombre'] }}</span>
+            </div>
+            <small class="text-muted">Proceso: {{ pr['proceso_nombre'] }}</small>
+        </a>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+<!-- INDICADORES -->
+{% if resultados.indicadores %}
+<div class="card mb-3">
+    <div class="card-header bg-white d-flex align-items-center gap-2">
+        <i class="bi bi-bar-chart-line text-info"></i>
+        <strong>Indicadores</strong>
+        <span class="badge bg-info ms-1">{{ resultados.indicadores|length }}</span>
+    </div>
+    <div class="list-group list-group-flush">
+        {% for i in resultados.indicadores %}
+        <a href="{{ url_for('indicador_editar', id=i['id']) }}"
+           class="list-group-item list-group-item-action py-2">
+            <div class="d-flex align-items-center gap-2">
+                <span class="badge bg-light text-dark border font-monospace small">{{ i['codigo'] }}</span>
+                <span class="small fw-medium">{{ i['nombre'] }}</span>
+            </div>
+            <small class="text-muted">Proceso: {{ i['proceso_nombre'] }}</small>
+        </a>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+<!-- NORMOGRAMA -->
+{% if resultados.normas %}
+<div class="card mb-3">
+    <div class="card-header bg-white d-flex align-items-center gap-2">
+        <i class="bi bi-journal-bookmark text-warning"></i>
+        <strong>Normograma</strong>
+        <span class="badge bg-warning text-dark ms-1">{{ resultados.normas|length }}</span>
+    </div>
+    <div class="list-group list-group-flush">
+        {% for n in resultados.normas %}
+        <a href="{{ url_for('normograma_editar', id=n['id']) }}"
+           class="list-group-item list-group-item-action py-2">
+            <div class="d-flex align-items-center gap-2">
+                <span class="badge bg-light text-dark border small">{{ n['tipo_norma'] }} {{ n['numero'] }}</span>
+                <span class="small fw-medium">{{ n['titulo'] }}</span>
+            </div>
+            <small class="text-muted">Proceso: {{ n['proceso_nombre'] }}</small>
+        </a>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+<!-- RIESGOS -->
+{% if resultados.riesgos %}
+{% set nivel_col = {'Extremo':'danger','Alto':'warning','Moderado':'info','Bajo':'success'} %}
+<div class="card mb-3">
+    <div class="card-header bg-white d-flex align-items-center gap-2">
+        <i class="bi bi-exclamation-triangle text-danger"></i>
+        <strong>Riesgos</strong>
+        <span class="badge bg-danger ms-1">{{ resultados.riesgos|length }}</span>
+    </div>
+    <div class="list-group list-group-flush">
+        {% for r in resultados.riesgos %}
+        <a href="{{ url_for('riesgo_editar', id=r['id']) }}"
+           class="list-group-item list-group-item-action py-2">
+            <div class="d-flex align-items-center gap-2">
+                <span class="badge bg-{{ nivel_col.get(r['nivel_riesgo'], 'secondary') }} small">{{ r['nivel_riesgo'] }}</span>
+                <span class="small fw-medium">{{ r['nombre'] }}</span>
+            </div>
+            <small class="text-muted">Proceso: {{ r['proceso_nombre'] }}</small>
+        </a>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+{% endif %}
+{% endblock %}

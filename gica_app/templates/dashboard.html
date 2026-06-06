@@ -11,6 +11,11 @@
         <h4 class="mb-0 fw-bold">Tablero Gestión Institucional de la Calidad</h4>
         <small class="text-muted">Avance GICA 2026 — Secretaría de Salud Departamental</small>
     </div>
+    <div>
+        <a href="{{ url_for('exportar_dashboard') }}" class="btn btn-sm btn-outline-success">
+            <i class="bi bi-file-earmark-excel me-1"></i>Exportar Excel
+        </a>
+    </div>
 </div>
 
 <!-- RESUMEN -->
@@ -56,6 +61,34 @@
                     <div class="fs-2 fw-bold text-danger">{{ resumen.rojo }}</div>
                 </div>
                 <i class="bi bi-x-circle-fill fs-1 text-danger opacity-25"></i>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- AVANCE GLOBAL GICA -->
+{% set sem_global = semaforo(resumen.avance_global / 100) %}
+<div class="card mb-4 border-0" style="background: linear-gradient(135deg, #1a2744 0%, #2c3e70 100%); color: #fff;">
+    <div class="card-body py-3">
+        <div class="row align-items-center">
+            <div class="col-auto">
+                <i class="bi bi-award-fill fs-2 text-warning opacity-75"></i>
+            </div>
+            <div class="col">
+                <div class="small opacity-75 fw-semibold text-uppercase" style="letter-spacing:.5px;">Avance Global GICA 2026</div>
+                <div class="d-flex align-items-center gap-3 mt-1">
+                    <div class="progress flex-grow-1" style="height:12px; border-radius:6px; background:rgba(255,255,255,.2); max-width:500px;">
+                        <div class="progress-bar {% if sem_global == 'verde' %}bg-success{% elif sem_global == 'amarillo' %}bg-warning{% else %}bg-danger{% endif %}"
+                             style="width:{{ resumen.avance_global }}%"></div>
+                    </div>
+                    <span class="fs-4 fw-bold">{{ resumen.avance_global }}%</span>
+                    <span class="badge {% if sem_global == 'verde' %}bg-success{% elif sem_global == 'amarillo' %}bg-warning text-dark{% else %}bg-danger{% endif %}">
+                        {{ sem_global | capitalize }}
+                    </span>
+                </div>
+            </div>
+            <div class="col-auto text-end opacity-60 small">
+                <i class="bi bi-calendar3 me-1"></i>Corte: {{ now.strftime('%d/%m/%Y') if now }}
             </div>
         </div>
     </div>
@@ -153,7 +186,9 @@
                                 </div>
                             </td>
                             <td class="semaforo-cell">
-                                <span class="badge-semaforo badge-{{ sem }}" title="{{ sem | upper }}"></span>
+                                <span class="badge-semaforo badge-{{ sem }}"
+                                      title="{{ sem | capitalize }} — {{ '%.1f'|format(p['ponderacion']*100) }}%"
+                                      data-bs-toggle="tooltip" data-bs-placement="top"></span>
                                 <span class="ms-1 small text-capitalize">{{ sem }}</span>
                             </td>
                             <td>

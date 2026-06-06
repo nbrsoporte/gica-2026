@@ -1,13 +1,28 @@
 from flask import (Flask, render_template, request, redirect, url_for,
-                   flash, jsonify, session, g)
+                   flash, jsonify, session, g, send_file, make_response)
 import sqlite3
 import os
+import io
+import csv as csv_module
 from datetime import datetime
 from functools import wraps
 from werkzeug.security import generate_password_hash, check_password_hash
 
+try:
+    from dotenv import load_dotenv
+    load_dotenv(os.path.join(os.path.dirname(__file__), '.env'))
+except ImportError:
+    pass
+
+try:
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill, Alignment
+    HAS_OPENPYXL = True
+except ImportError:
+    HAS_OPENPYXL = False
+
 app = Flask(__name__)
-app.secret_key = 'gica$secretaria#salud@2026_XK9!'
+app.secret_key = os.environ.get('GICA_SECRET_KEY', 'gica$secretaria#salud@2026_XK9!')
 DB_PATH = os.path.join(os.path.dirname(__file__), 'gica.db')
 
 
@@ -46,6 +61,16 @@ def inject_globals():
         'now': datetime.now(),
         'session_user': session.get('user'),
     }
+
+
+@app.errorhandler(404)
+def not_found(e):
+    return render_template('errors/404.html'), 404
+
+
+@app.errorhandler(500)
+def server_error(e):
+    return render_template('errors/500.html'), 500
 
 
 def registrar_auditoria(accion, modulo='', detalle=''):
@@ -490,6 +515,8 @@ def auditoria():
     db = get_db()
     filtro_usuario = request.args.get('username', '')
     filtro_accion = request.args.get('accion', '')
+    filtro_desde = request.args.get('desde', '')
+    filtro_hasta = request.args.get('hasta', '')
     query = 'SELECT * FROM log_auditoria WHERE 1=1'
     params = []
     if filtro_usuario:
@@ -498,13 +525,20 @@ def auditoria():
     if filtro_accion:
         query += ' AND accion=?'
         params.append(filtro_accion)
-    query += ' ORDER BY fecha DESC LIMIT 500'
+    if filtro_desde:
+        query += ' AND fecha >= ?'
+        params.append(filtro_desde)
+    if filtro_hasta:
+        query += ' AND fecha <= ?'
+        params.append(filtro_hasta + ' 23:59:59')
+    query += ' ORDER BY fecha DESC LIMIT 1000'
     logs = db.execute(query, params).fetchall()
     acciones = db.execute('SELECT DISTINCT accion FROM log_auditoria ORDER BY accion').fetchall()
     db.close()
     return render_template('admin/auditoria.html', logs=logs,
                            acciones=acciones, filtro_usuario=filtro_usuario,
-                           filtro_accion=filtro_accion)
+                           filtro_accion=filtro_accion,
+                           filtro_desde=filtro_desde, filtro_hasta=filtro_hasta)
 
 
 # ─── DASHBOARD ──────────────────────────────────────────────────────────────
@@ -529,11 +563,15 @@ def dashboard():
         LEFT JOIN ponderacion_proceso scores ON p.id = scores.proceso_id
         ORDER BY tp.orden, p.codigo
     ''').fetchall()
+    total = len(procesos)
+    ponds = [p['ponderacion'] for p in procesos]
+    avance_global = round((sum(ponds) / total * 100) if total else 0, 1)
     resumen = {
-        'total': len(procesos),
+        'total': total,
         'verde': sum(1 for p in procesos if semaforo(p['ponderacion']) == 'verde'),
         'amarillo': sum(1 for p in procesos if semaforo(p['ponderacion']) == 'amarillo'),
         'rojo': sum(1 for p in procesos if semaforo(p['ponderacion']) == 'rojo'),
+        'avance_global': avance_global,
     }
     db.close()
     return render_template('dashboard.html', procesos=procesos, resumen=resumen)
@@ -1270,6 +1308,242 @@ def riesgo_eliminar(id):
     flash('Riesgo eliminado.', 'warning')
     db.close()
     return redirect(url_for('riesgos'))
+
+
+# ─── BÚSQUEDA GLOBAL ─────────────────────────────────────────────────────────
+
+@app.route('/buscar')
+@login_required
+def buscar():
+    q = request.args.get('q', '').strip()
+    if not q or len(q) < 2:
+        return render_template('buscar.html', resultados={}, q=q, total=0)
+    db = get_db()
+    like = f'%{q}%'
+    procs = db.execute(
+        'SELECT id, codigo, nombre FROM proceso WHERE nombre LIKE ? OR codigo LIKE ? LIMIT 10',
+        (like, like)).fetchall()
+    procs_det = db.execute(
+        '''SELECT pr.id, pr.codigo, pr.nombre, p.nombre as proceso_nombre
+           FROM procedimiento pr JOIN proceso p ON pr.proceso_id = p.id
+           WHERE pr.nombre LIKE ? OR pr.codigo LIKE ? LIMIT 10''',
+        (like, like)).fetchall()
+    normas = db.execute(
+        '''SELECT n.id, n.titulo, n.tipo_norma, n.numero, p.nombre as proceso_nombre
+           FROM normograma n JOIN proceso p ON n.proceso_id = p.id
+           WHERE n.titulo LIKE ? OR n.numero LIKE ? OR n.descripcion LIKE ? LIMIT 10''',
+        (like, like, like)).fetchall()
+    riesgos_r = db.execute(
+        '''SELECT r.id, r.codigo, r.nombre, r.nivel_riesgo, p.nombre as proceso_nombre
+           FROM riesgo r JOIN proceso p ON r.proceso_id = p.id
+           WHERE r.nombre LIKE ? OR r.descripcion LIKE ? LIMIT 10''',
+        (like, like)).fetchall()
+    indicad = db.execute(
+        '''SELECT i.id, i.codigo, i.nombre, p.nombre as proceso_nombre
+           FROM indicador i JOIN proceso p ON i.proceso_id = p.id
+           WHERE i.nombre LIKE ? OR i.codigo LIKE ? LIMIT 10''',
+        (like, like)).fetchall()
+    db.close()
+    resultados = {
+        'procesos': procs,
+        'procedimientos': procs_det,
+        'indicadores': indicad,
+        'normas': normas,
+        'riesgos': riesgos_r,
+    }
+    total = sum(len(v) for v in resultados.values())
+    return render_template('buscar.html', resultados=resultados, q=q, total=total)
+
+
+# ─── EXPORTACIÓN ─────────────────────────────────────────────────────────────
+
+def _excel_header_style():
+    font = Font(bold=True, color='FFFFFF', size=10)
+    fill = PatternFill('solid', fgColor='1A2744')
+    align = Alignment(horizontal='center', vertical='center', wrap_text=True)
+    return font, fill, align
+
+
+@app.route('/exportar/dashboard')
+@login_required
+def exportar_dashboard():
+    db = get_db()
+    rows = db.execute('''
+        SELECT p.codigo, p.nombre, tp.nombre as tipo,
+               COALESCE(s.proc_score,0)*100 as proc,
+               COALESCE(s.ind_score,0)*100 as ind,
+               COALESCE(s.car_score,0)*100 as car,
+               COALESCE(s.norm_score,0)*100 as norm,
+               COALESCE(s.risk_score,0)*100 as risk,
+               COALESCE((COALESCE(s.proc_score,0)+COALESCE(s.ind_score,0)+
+                         COALESCE(s.car_score,0)+COALESCE(s.norm_score,0)+
+                         COALESCE(s.risk_score,0))/5.0,0)*100 as ponderacion
+        FROM proceso p
+        LEFT JOIN tipo_proceso tp ON p.tipo_proceso_id = tp.id
+        LEFT JOIN ponderacion_proceso s ON p.id = s.proceso_id
+        ORDER BY tp.orden, p.codigo
+    ''').fetchall()
+    db.close()
+
+    if HAS_OPENPYXL:
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = 'Tablero GICA'
+        font_h, fill_h, align_h = _excel_header_style()
+        headers = ['Código', 'Proceso', 'Tipo', 'Proced. %', 'Indicad. %',
+                   'Caracteriz. %', 'Normograma %', 'M. Riesgos %', 'Total %', 'Estado']
+        for col, h in enumerate(headers, 1):
+            cell = ws.cell(row=1, column=col, value=h)
+            cell.font = font_h
+            cell.fill = fill_h
+            cell.alignment = align_h
+        colores_sem = {'Verde': 'C6EFCE', 'Amarillo': 'FFEB9C', 'Rojo': 'FFC7CE'}
+        for row_i, p in enumerate(rows, 2):
+            pond = round(p['ponderacion'], 1)
+            estado = 'Verde' if pond >= 90 else ('Amarillo' if pond >= 70 else 'Rojo')
+            data = [p['codigo'], p['nombre'], p['tipo'],
+                    round(p['proc'], 1), round(p['ind'], 1), round(p['car'], 1),
+                    round(p['norm'], 1), round(p['risk'], 1), pond, estado]
+            for col_i, val in enumerate(data, 1):
+                cell = ws.cell(row=row_i, column=col_i, value=val)
+                if estado in colores_sem:
+                    cell.fill = PatternFill('solid', fgColor=colores_sem[estado])
+        ws.column_dimensions['B'].width = 40
+        ws.column_dimensions['C'].width = 18
+        for col_letter in ['A', 'D', 'E', 'F', 'G', 'H', 'I', 'J']:
+            ws.column_dimensions[col_letter].width = 14
+        ws.freeze_panes = 'A2'
+        output = io.BytesIO()
+        wb.save(output)
+        output.seek(0)
+        filename = f'Tablero_GICA_{datetime.now().strftime("%Y%m%d")}.xlsx'
+        return send_file(output, download_name=filename, as_attachment=True,
+                         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    else:
+        output = io.StringIO()
+        writer = csv_module.writer(output)
+        writer.writerow(['Código', 'Proceso', 'Tipo', 'Proced.%', 'Indicad.%',
+                         'Caracteriz.%', 'Normograma%', 'M.Riesgos%', 'Total%', 'Estado'])
+        for p in rows:
+            pond = round(p['ponderacion'], 1)
+            estado = 'Verde' if pond >= 90 else ('Amarillo' if pond >= 70 else 'Rojo')
+            writer.writerow([p['codigo'], p['nombre'], p['tipo'],
+                             round(p['proc'], 1), round(p['ind'], 1), round(p['car'], 1),
+                             round(p['norm'], 1), round(p['risk'], 1), pond, estado])
+        resp = make_response(output.getvalue())
+        resp.headers['Content-Type'] = 'text/csv; charset=utf-8'
+        resp.headers['Content-Disposition'] = f'attachment; filename=Tablero_GICA_{datetime.now().strftime("%Y%m%d")}.csv'
+        return resp
+
+
+@app.route('/exportar/riesgos')
+@login_required
+def exportar_riesgos():
+    db = get_db()
+    rows = db.execute('''
+        SELECT r.codigo, r.nombre, r.descripcion, r.tipo_riesgo, r.causa,
+               r.consecuencia, r.probabilidad, r.impacto, r.nivel_riesgo,
+               r.control_existente, r.accion_mitigacion, r.responsable,
+               r.fecha_identificacion, p.nombre as proceso_nombre
+        FROM riesgo r JOIN proceso p ON r.proceso_id = p.id
+        ORDER BY (r.probabilidad * r.impacto) DESC
+    ''').fetchall()
+    db.close()
+
+    if HAS_OPENPYXL:
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = 'Mapa de Riesgos'
+        font_h, fill_h, align_h = _excel_header_style()
+        headers = ['Código', 'Riesgo', 'Proceso', 'Tipo', 'Causa', 'Consecuencia',
+                   'Probabilidad', 'Impacto', 'Nivel', 'Control Existente',
+                   'Acción Mitigación', 'Responsable', 'Fecha Identificación']
+        for col, h in enumerate(headers, 1):
+            cell = ws.cell(row=1, column=col, value=h)
+            cell.font = font_h
+            cell.fill = fill_h
+            cell.alignment = align_h
+        nivel_colors = {'Extremo': 'FFC7CE', 'Alto': 'FFEB9C', 'Moderado': 'DDEBF7', 'Bajo': 'C6EFCE'}
+        for row_i, r in enumerate(rows, 2):
+            data = [r['codigo'], r['nombre'], r['proceso_nombre'], r['tipo_riesgo'],
+                    r['causa'], r['consecuencia'], r['probabilidad'], r['impacto'],
+                    r['nivel_riesgo'], r['control_existente'], r['accion_mitigacion'],
+                    r['responsable'], r['fecha_identificacion']]
+            for col_i, val in enumerate(data, 1):
+                cell = ws.cell(row=row_i, column=col_i, value=val)
+                nivel = r['nivel_riesgo'] or 'Bajo'
+                if nivel in nivel_colors:
+                    cell.fill = PatternFill('solid', fgColor=nivel_colors[nivel])
+        for col_letter, width in [('A', 10), ('B', 35), ('C', 30), ('D', 15),
+                                   ('E', 30), ('F', 30), ('G', 12), ('H', 10),
+                                   ('I', 12), ('J', 35), ('K', 35), ('L', 20), ('M', 15)]:
+            ws.column_dimensions[col_letter].width = width
+        ws.freeze_panes = 'A2'
+        output = io.BytesIO()
+        wb.save(output)
+        output.seek(0)
+        filename = f'Riesgos_GICA_{datetime.now().strftime("%Y%m%d")}.xlsx'
+        return send_file(output, download_name=filename, as_attachment=True,
+                         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    else:
+        output = io.StringIO()
+        writer = csv_module.writer(output)
+        writer.writerow(['Código', 'Riesgo', 'Proceso', 'Tipo', 'Causa', 'Consecuencia',
+                         'Probabilidad', 'Impacto', 'Nivel', 'Control', 'Mitigación', 'Responsable', 'Fecha'])
+        for r in rows:
+            writer.writerow([r['codigo'], r['nombre'], r['proceso_nombre'], r['tipo_riesgo'],
+                             r['causa'], r['consecuencia'], r['probabilidad'], r['impacto'],
+                             r['nivel_riesgo'], r['control_existente'], r['accion_mitigacion'],
+                             r['responsable'], r['fecha_identificacion']])
+        resp = make_response(output.getvalue())
+        resp.headers['Content-Type'] = 'text/csv; charset=utf-8'
+        resp.headers['Content-Disposition'] = f'attachment; filename=Riesgos_GICA_{datetime.now().strftime("%Y%m%d")}.csv'
+        return resp
+
+
+@app.route('/exportar/auditoria')
+@solo_admin
+def exportar_auditoria():
+    db = get_db()
+    rows = db.execute(
+        'SELECT * FROM log_auditoria ORDER BY fecha DESC LIMIT 5000'
+    ).fetchall()
+    db.close()
+
+    if HAS_OPENPYXL:
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = 'Log Auditoría'
+        font_h, fill_h, align_h = _excel_header_style()
+        headers = ['ID', 'Usuario', 'Acción', 'Módulo', 'Detalle', 'IP', 'Fecha y Hora']
+        for col, h in enumerate(headers, 1):
+            cell = ws.cell(row=1, column=col, value=h)
+            cell.font = font_h
+            cell.fill = fill_h
+            cell.alignment = align_h
+        for row_i, log in enumerate(rows, 2):
+            ws.append([log['id'], log['username'], log['accion'], log['modulo'],
+                       log['detalle'], log['ip'], log['fecha']])
+        for col_letter, width in [('A', 8), ('B', 18), ('C', 18), ('D', 18), ('E', 50), ('F', 15), ('G', 20)]:
+            ws.column_dimensions[col_letter].width = width
+        ws.freeze_panes = 'A2'
+        output = io.BytesIO()
+        wb.save(output)
+        output.seek(0)
+        filename = f'Auditoria_GICA_{datetime.now().strftime("%Y%m%d")}.xlsx'
+        return send_file(output, download_name=filename, as_attachment=True,
+                         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    else:
+        output = io.StringIO()
+        writer = csv_module.writer(output)
+        writer.writerow(['ID', 'Usuario', 'Acción', 'Módulo', 'Detalle', 'IP', 'Fecha'])
+        for log in rows:
+            writer.writerow([log['id'], log['username'], log['accion'], log['modulo'],
+                             log['detalle'], log['ip'], log['fecha']])
+        resp = make_response(output.getvalue())
+        resp.headers['Content-Type'] = 'text/csv; charset=utf-8'
+        resp.headers['Content-Disposition'] = f'attachment; filename=Auditoria_GICA_{datetime.now().strftime("%Y%m%d")}.csv'
+        return resp
 
 
 # ─── API JSON ────────────────────────────────────────────────────────────────

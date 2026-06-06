@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}GICA - Sistema de Gestión de Calidad{% endblock %}</title>
+    <meta name="description" content="Sistema GICA 2026 — Gestión Institucional de la Calidad. Secretaría de Salud Departamental de Bolívar.">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='%231a2744' d='M5.338 1.59a61 61 0 0 0-2.837.856.481.481 0 0 0-.328.39c-.554 4.157.726 7.19 2.253 9.188a10.7 10.7 0 0 0 2.287 2.233c.346.244.652.42.893.533a2 2 0 0 0 .394.143 2 2 0 0 0 .394-.143c.24-.113.547-.29.893-.533a10.7 10.7 0 0 0 2.287-2.233c1.527-1.997 2.807-5.031 2.253-9.188a.48.48 0 0 0-.328-.39 61 61 0 0 0-2.837-.855C9.552 1.29 8.531 1.067 8 1.067c-.53 0-1.552.223-2.662.524z'/%3E%3C/svg%3E">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
     <link href="https://cdn.datatables.net/1.13.7/css/dataTables.bootstrap5.min.css" rel="stylesheet">
@@ -70,6 +72,8 @@
         .stat-card.rojo { border-color: var(--color-rojo); }
         .stat-card.azul { border-color: var(--color-primary); }
         .table th { font-size: .78rem; text-transform: uppercase; letter-spacing: .5px; color: #6c757d; }
+        .table tbody tr { transition: background-color .15s ease; }
+        .table-hover tbody tr:hover { background-color: rgba(13, 110, 253, .04); }
         .ponderacion-bar { height: 8px; border-radius: 4px; }
         .estado-badge { font-size: .72rem; }
         .avatar-sm {
@@ -77,10 +81,15 @@
             display: inline-flex; align-items: center; justify-content: center;
             font-weight: 700; font-size: .85rem;
         }
+        .badge-semaforo { cursor: default; }
+        .search-topbar .form-control { font-size: .82rem; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
+        .alert { animation: fadeIn .25s ease; }
         @media (max-width: 768px) {
             #sidebar { transform: translateX(-100%); transition: transform .3s; }
             #sidebar.show { transform: translateX(0); }
             #main-content { margin-left: 0; }
+            .search-topbar { display: none !important; }
         }
     </style>
     {% block head %}{% endblock %}
@@ -107,46 +116,52 @@
 
         <li><div class="nav-section mt-1">Estructura</div></li>
         <li class="nav-item">
-            <a href="{{ url_for('tipos_proceso') }}" class="nav-link {% if 'tipo' in request.endpoint %}active{% endif %}">
+            <a href="{{ url_for('tipos_proceso') }}" class="nav-link {% if 'tipo' in (request.endpoint or '') %}active{% endif %}">
                 <i class="bi bi-diagram-3"></i> Tipos de Proceso
             </a>
         </li>
         <li class="nav-item">
-            <a href="{{ url_for('organigrama') }}" class="nav-link {% if 'organigrama' in request.endpoint %}active{% endif %}">
+            <a href="{{ url_for('organigrama') }}" class="nav-link {% if 'organigrama' in (request.endpoint or '') %}active{% endif %}">
                 <i class="bi bi-building"></i> Organigrama
             </a>
         </li>
         <li class="nav-item">
-            <a href="{{ url_for('procesos') }}" class="nav-link {% if request.endpoint in ['procesos','proceso_nuevo','proceso_editar','proceso_detalle','proceso_ponderacion'] %}active{% endif %}">
+            <a href="{{ url_for('procesos') }}" class="nav-link {% if (request.endpoint or '') in ['procesos','proceso_nuevo','proceso_editar','proceso_detalle','proceso_ponderacion'] %}active{% endif %}">
                 <i class="bi bi-gear-wide-connected"></i> Procesos
             </a>
         </li>
 
         <li><div class="nav-section mt-1">Documentación</div></li>
         <li class="nav-item">
-            <a href="{{ url_for('procedimientos') }}" class="nav-link {% if 'procedimiento' in request.endpoint %}active{% endif %}">
+            <a href="{{ url_for('procedimientos') }}" class="nav-link {% if 'procedimiento' in (request.endpoint or '') %}active{% endif %}">
                 <i class="bi bi-file-earmark-text"></i> Procedimientos
             </a>
         </li>
         <li class="nav-item">
-            <a href="{{ url_for('indicadores') }}" class="nav-link {% if 'indicador' in request.endpoint %}active{% endif %}">
+            <a href="{{ url_for('indicadores') }}" class="nav-link {% if 'indicador' in (request.endpoint or '') %}active{% endif %}">
                 <i class="bi bi-bar-chart-line"></i> Indicadores
             </a>
         </li>
         <li class="nav-item">
-            <a href="{{ url_for('caracterizacion') }}" class="nav-link {% if 'caracterizacion' in request.endpoint %}active{% endif %}">
+            <a href="{{ url_for('caracterizacion') }}" class="nav-link {% if 'caracterizacion' in (request.endpoint or '') %}active{% endif %}">
                 <i class="bi bi-card-checklist"></i> Caracterización
+            </a>
+        </li>
+
+        <li class="nav-item d-md-none">
+            <a href="{{ url_for('buscar') }}" class="nav-link {% if request.endpoint == 'buscar' %}active{% endif %}">
+                <i class="bi bi-search"></i> Buscar
             </a>
         </li>
 
         <li><div class="nav-section mt-1">Control</div></li>
         <li class="nav-item">
-            <a href="{{ url_for('normograma') }}" class="nav-link {% if 'normograma' in request.endpoint %}active{% endif %}">
+            <a href="{{ url_for('normograma') }}" class="nav-link {% if 'normograma' in (request.endpoint or '') %}active{% endif %}">
                 <i class="bi bi-journal-bookmark"></i> Normograma
             </a>
         </li>
         <li class="nav-item">
-            <a href="{{ url_for('riesgos') }}" class="nav-link {% if 'riesgo' in request.endpoint %}active{% endif %}">
+            <a href="{{ url_for('riesgos') }}" class="nav-link {% if 'riesgo' in (request.endpoint or '') %}active{% endif %}">
                 <i class="bi bi-exclamation-triangle"></i> Mapa de Riesgos
             </a>
         </li>
@@ -155,17 +170,17 @@
         <li><div class="nav-divider"></div></li>
         <li><div class="nav-section">Administración</div></li>
         <li class="nav-item">
-            <a href="{{ url_for('usuarios_list') }}" class="nav-link {% if 'usuario' in request.endpoint %}active{% endif %}">
+            <a href="{{ url_for('usuarios_list') }}" class="nav-link {% if 'usuario' in (request.endpoint or '') %}active{% endif %}">
                 <i class="bi bi-people"></i> Usuarios
             </a>
         </li>
         <li class="nav-item">
-            <a href="{{ url_for('roles_list') }}" class="nav-link {% if 'rol' in request.endpoint %}active{% endif %}">
+            <a href="{{ url_for('roles_list') }}" class="nav-link {% if 'rol' in (request.endpoint or '') %}active{% endif %}">
                 <i class="bi bi-shield"></i> Roles
             </a>
         </li>
         <li class="nav-item">
-            <a href="{{ url_for('auditoria') }}" class="nav-link {% if 'auditoria' in request.endpoint %}active{% endif %}">
+            <a href="{{ url_for('auditoria') }}" class="nav-link {% if 'auditoria' in (request.endpoint or '') %}active{% endif %}">
                 <i class="bi bi-clock-history"></i> Auditoría
             </a>
         </li>
@@ -229,6 +244,17 @@
             </nav>
         </div>
         <div class="d-flex align-items-center gap-3">
+            <form class="search-topbar d-flex align-items-center d-none d-md-flex"
+                  action="{{ url_for('buscar') }}" method="get" role="search">
+                <div class="input-group input-group-sm" style="width:230px;">
+                    <input type="text" name="q" class="form-control border-0 bg-light"
+                           placeholder="Buscar en GICA..." autocomplete="off"
+                           value="{{ request.args.get('q', '') if request.endpoint == 'buscar' else '' }}">
+                    <button class="btn btn-outline-secondary" type="submit" title="Buscar">
+                        <i class="bi bi-search" style="font-size:.8rem;"></i>
+                    </button>
+                </div>
+            </form>
             <div class="small text-muted d-none d-sm-block">
                 <i class="bi bi-calendar3 me-1"></i>{{ now.strftime('%d/%m/%Y') if now }}
             </div>
@@ -283,22 +309,108 @@
     </div>
 </div>
 
+<!-- Modal de Confirmación Global -->
+<div class="modal fade" id="confirmModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" style="max-width:420px">
+        <div class="modal-content border-0 shadow-lg">
+            <div class="modal-header border-0 pb-0">
+                <div class="d-flex align-items-center gap-2">
+                    <div class="rounded-circle bg-danger bg-opacity-10 d-flex align-items-center justify-content-center"
+                         style="width:40px;height:40px;">
+                        <i class="bi bi-exclamation-triangle-fill text-danger"></i>
+                    </div>
+                    <h6 class="modal-title mb-0 fw-bold">Confirmar eliminación</h6>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body pt-2">
+                <p class="mb-0 text-muted" id="confirmMsg">¿Está seguro de eliminar este registro? Esta acción no se puede deshacer.</p>
+            </div>
+            <div class="modal-footer border-0 pt-0">
+                <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">
+                    <i class="bi bi-x me-1"></i>Cancelar
+                </button>
+                <button type="button" class="btn btn-danger btn-sm" id="confirmBtn">
+                    <i class="bi bi-trash me-1"></i>Sí, eliminar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
 <script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
 <script src="https://cdn.datatables.net/1.13.7/js/dataTables.bootstrap5.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script>
+// Sidebar toggle
 document.getElementById('sidebarToggle')?.addEventListener('click', () => {
     document.getElementById('sidebar').classList.toggle('show');
 });
+
+// DataTables en español con spinner de carga
 $(document).ready(function() {
     if ($('.datatable').length) {
         $('.datatable').DataTable({
             language: { url: 'https://cdn.datatables.net/plug-ins/1.13.7/i18n/es-ES.json' },
-            pageLength: 25
+            pageLength: 25,
+            processing: true,
+            dom: '<"d-flex justify-content-between align-items-center mb-2"lf>rtip'
         });
     }
+});
+
+// Auto-dismiss de alertas en 6 segundos
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.alert.alert-dismissible').forEach(function(alert) {
+        setTimeout(function() {
+            const bsAlert = bootstrap.Alert.getOrCreateInstance(alert);
+            if (bsAlert) bsAlert.close();
+        }, 6000);
+    });
+});
+
+// Interceptar confirmaciones de eliminación → Modal Bootstrap
+(function() {
+    let pendingForm = null;
+    const confirmModal = new bootstrap.Modal(document.getElementById('confirmModal'));
+
+    document.addEventListener('submit', function(e) {
+        const form = e.target;
+        const onsubmitAttr = form.getAttribute('onsubmit') || '';
+        if (!onsubmitAttr.includes('confirm(')) return;
+
+        e.preventDefault();
+        e.stopImmediatePropagation();
+
+        const match = onsubmitAttr.match(/confirm\(['"]([^'"]+)['"]\)/);
+        const msg = match ? match[1] : '¿Está seguro de eliminar este registro? Esta acción no se puede deshacer.';
+        document.getElementById('confirmMsg').textContent = msg + ' Esta acción no se puede deshacer.';
+        pendingForm = form;
+        confirmModal.show();
+    }, true);
+
+    document.getElementById('confirmBtn').addEventListener('click', function() {
+        if (pendingForm) {
+            const original = pendingForm.getAttribute('onsubmit');
+            pendingForm.removeAttribute('onsubmit');
+            pendingForm.submit();
+            if (original) pendingForm.setAttribute('onsubmit', original);
+        }
+        confirmModal.hide();
+    });
+
+    document.getElementById('confirmModal').addEventListener('hidden.bs.modal', function() {
+        pendingForm = null;
+    });
+})();
+
+// Tooltip en badges de semáforo
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.badge-semaforo[title]').forEach(function(el) {
+        new bootstrap.Tooltip(el, { placement: 'top', trigger: 'hover' });
+    });
 });
 </script>
 {% block scripts %}{% endblock %}
