@@ -20,11 +20,15 @@
         body { background: #f4f6f9; }
         #sidebar {
             width: var(--sidebar-width);
-            min-height: 100vh;
+            height: 100vh;
             background: linear-gradient(180deg, #1a2744 0%, #2c3e70 100%);
             position: fixed; top: 0; left: 0;
-            overflow-y: auto; z-index: 1000;
+            overflow-y: scroll; z-index: 1000;
         }
+        #sidebar::-webkit-scrollbar { width: 5px; }
+        #sidebar::-webkit-scrollbar-track { background: rgba(0,0,0,.15); }
+        #sidebar::-webkit-scrollbar-thumb { background: rgba(255,255,255,.25); border-radius: 3px; }
+        #sidebar::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,.45); }
         #sidebar .sidebar-brand {
             padding: .75rem 1rem;
             border-bottom: 1px solid rgba(255,255,255,.1);
